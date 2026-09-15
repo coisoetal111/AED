@@ -60,7 +60,7 @@ int cities = 0;
  }
  rewind(position);
 
- //agrupamento em clusters
+ //agrupamento em clusters (Task1)
  int clusters[cities];
  for(int i = 0; i < cities; i++) clusters[i] = i;
  int i = 0;
