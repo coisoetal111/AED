@@ -12,6 +12,8 @@ int main(int argc, char **argv){
 FILE *map = NULL;
 FILE *quests = NULL;
 FILE *position = NULL;
+FILE *results = NULL;
+char result[1024];
 int cities = 0;
 
 //verificação do numero de argumentos corretos
@@ -26,15 +28,21 @@ int cities = 0;
 //verificação do tipo de ficheiros corretos
  for (int i = 0; i < 3; i++)
  {
-    int j = sizeof(arg[i]);
+    int j = strlen(arg[i]);
     char temp;
     char *temp_;
     for (int h = 0; h < j; h++)
     {
         temp = arg[i][j - h];
-        if(temp == '.'){
+        if(temp == '.'){  
             temp_ = &arg[i][j-h];
-           if (strcmp(temp_, ".quests") == 0) quests = fopen(arg[i], "r");
+           if (strcmp(temp_, ".quests") == 0){
+             quests = fopen(arg[i], "r");
+             arg[i][j - h] = '\0';
+             sprintf(result, "%s.results", arg[i]);
+             arg[i][j - h] = '.';
+             results = fopen(result,"w");
+           }
            else if (strcmp(temp_, ".map") == 0) map = fopen(arg[i], "r");
            else if( strcmp(temp_, ".position") == 0) position = fopen(arg[i], "r");
            else exit(EXIT_FAILURE);
@@ -63,7 +71,35 @@ int cities = 0;
     for(int i = 0; i < cities; i++) if(clusters[i] == r) clusters[i] = clusters[p];
  }
  rewind(map);
-  for(int i = 0; i < cities; i++) printf("%d", clusters[i]) ;
+  
+ //cluster counter
+ int temp[cities];
+ for (int i = 0; i < cities; i++) temp[i] = 0;
+ int temp_ = 0;
+
+ int cluster_couter = 1;
+ for(int i = 2; i < cities; i++) if(clusters[1] != clusters[i]){ 
+    
+
+    if(temp_ == 0){
+         cluster_couter++;
+         temp_ ++;
+         temp[0] = clusters[i];
+    }else{
+        for(int j = 0; j < temp_; j++){
+            if(temp[j] == clusters[i]){
+                continue;
+            }
+            temp[temp_] = clusters[i];
+            temp_ ++;
+            cluster_couter++;
+        }
+    }
+    
+
+}
+
+fprintf(results, "Task1 %d", cluster_couter);
  
  
 
