@@ -9,6 +9,11 @@
 
 int main(int argc, char **argv){
 
+FILE *map = NULL;
+FILE *quests = NULL;
+FILE *position = NULL;
+int cities = 0;
+
 //verificação do numero de argumentos corretos
  if(argc!=4) exit(EXIT_FAILURE);
  char *arg[3];
@@ -29,13 +34,37 @@ int main(int argc, char **argv){
         temp = arg[i][j - h];
         if(temp == '.'){
             temp_ = &arg[i][j-h];
-           if (!(strcmp(temp_, ".quests") == 0 || strcmp(temp_, ".map") == 0 || strcmp(temp_, ".position") == 0)) exit(EXIT_FAILURE);
+           if (strcmp(temp_, ".quests") == 0) quests = fopen(arg[i], "r");
+           else if (strcmp(temp_, ".map") == 0) map = fopen(arg[i], "r");
+           else if( strcmp(temp_, ".position") == 0) position = fopen(arg[i], "r");
+           else exit(EXIT_FAILURE);
            
         }
     }
     
  }
-  
+ if(map == NULL || position == NULL || quests == NULL) exit(EXIT_FAILURE); 
+ 
+ //contagem do número de cidades
+ int ch;
+ while((ch = fgetc(position)) != EOF){
+    if(ch == '\n') cities ++;
+ }
+ rewind(position);
+
+ //agrupamento em clusters
+ int clusters[cities];
+ for(int i = 0; i < cities; i++) clusters[i] = i;
+ int i = 0;
+ int p,q,r;
+ while(fscanf(map, "%d %d", &p, &q) == 2){
+    if(clusters[p] == clusters[q]) continue; 
+    r = clusters[q];
+    for(int i = 0; i < cities; i++) if(clusters[i] == r) clusters[i] = clusters[p];
+ }
+ rewind(map);
+  for(int i = 0; i < cities; i++) printf("%d", clusters[i]) ;
+ 
  
 
 }
