@@ -85,6 +85,20 @@ int cities = 0;
 
  ClusterMan(clusters, cities, cluster_head);
  int cluster_counter = cluster_head[0];
+   int j = 1;
+    
+    fprintf(results, "\n\nTask2 %d", cluster_counter);
+    fprintf(results, "\nCluster: ");
+    for(int i = 0; i <= cities; i++) if(clusters[0] == clusters[i]) fprintf(results, "%d ", i + 1);
+    while(cluster_head[j] != 0){
+        fprintf(results, "\nCluster: ");
+         for(int i = 0; i <= cities; i++){
+            if(clusters[i] == cluster_head[j]){
+                fprintf(results, "%d ", i + 1);
+            }
+        }
+        j++;
+    }
  QuestsMan( results,  quests,  cluster_head,  cluster_counter,  cities,  clusters);
 
  return 0;
