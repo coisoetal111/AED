@@ -5,7 +5,7 @@
 #include <stdbool.h>
 #include <unistd.h>
 
-void ClusterMan(int*, int, int*);
+int ClusterMan(int* clusters, int cities, int* cluster_head, int operations);
 void QuestsMan(FILE* results, FILE* quests, int* cluster_head, int cluster_counter, int cities, int* clusters);
 void Task1(int cluster_counter, FILE* results);
 void Task2(int* cluster_head, int cluster_counter,int cities, int* clusters, FILE* results);
@@ -61,7 +61,7 @@ int cities = 0;
 
  int operations;
  fscanf(map, "%d %d", &cities, &operations);
- if(cities <= 0 || operations <= 0)exit(EXIT_FAILURE);
+ if(cities <= 0 || operations < 0)exit(EXIT_FAILURE);
  
  //agrupamento em clusters
  int clusters[cities];
@@ -83,22 +83,8 @@ int cities = 0;
  int cluster_head[cities];
 
 
- ClusterMan(clusters, cities, cluster_head);
- int cluster_counter = cluster_head[0];
-   int j = 1;
-    
-    fprintf(results, "\n\nTask2 %d", cluster_counter);
-    fprintf(results, "\nCluster: ");
-    for(int i = 0; i <= cities; i++) if(clusters[0] == clusters[i]) fprintf(results, "%d ", i + 1);
-    while(cluster_head[j] != 0){
-        fprintf(results, "\nCluster: ");
-         for(int i = 0; i <= cities; i++){
-            if(clusters[i] == cluster_head[j]){
-                fprintf(results, "%d ", i + 1);
-            }
-        }
-        j++;
-    }
+ int cluster_counter = ClusterMan(clusters, cities, cluster_head, operations);
+
  QuestsMan( results,  quests,  cluster_head,  cluster_counter,  cities,  clusters);
 
  return 0;
@@ -108,38 +94,50 @@ int cities = 0;
 
 
 
-void ClusterMan(int* clusters, int cities, int* cluster_head){
+int ClusterMan(int* clusters, int cities, int* cluster_head, int operations){
  
- for (int i = 0; i < cities; i++) cluster_head[i] = 0;
+if(operations >= 0){
+for (int i = 0; i < cities; i++) cluster_head[i] = 0; 
  int temp_ = 0;
-
+ int found = 0;
  int cluster_counter = 1;
- for(int i = 1; i < cities; i++) if(clusters[0] != clusters[i]){ 
+ for(int i = 1; i < cities; i++) if(clusters[i] != clusters[0]){ 
     
 
     if(temp_ == 0){
          cluster_counter++;
          temp_ ++;
-         cluster_head[1] = clusters[i];
+         cluster_head[0] = clusters[i];
     }else{
         for(int j = 0; j < temp_; j++){
-            if(cluster_head[j + 1] == clusters[i]){
-                continue;
-            }else if(j == temp_ - 1){
-                cluster_head[temp_ + 1] = clusters[i];
-                temp_ ++;
-                cluster_counter++;
+            found = 0;
+            if(cluster_head[j] == clusters[i]){
+                found = 1;
+                break;
             }
+        }
+        if(found == 0){
+            cluster_head[temp_] = clusters[i];
+            temp_ ++;
+            cluster_counter++;
+        }
         }
         
     }
     
+ 
+ return cluster_counter;
+}else{
+    int cluster_counter = cities;
+    for (int i = 0; i < cities; i++) cluster_head[i] = i + 1;
+    return cluster_counter;
+
 
 }
-
-cluster_head[0] = cluster_counter;
-
 }
+  
+
+
 
 void Task1(int cluster_counter, FILE* results){
 
@@ -152,7 +150,7 @@ void Task2(int* cluster_head, int cluster_counter, int cities, int* clusters, FI
     
     fprintf(results, "\n\nTask2 %d", cluster_counter);
     fprintf(results, "\nCluster: ");
-    for(int i = 1; i <= cities; i++) if(clusters[1] == clusters[i]) fprintf(results, "%d ", i);
+    for(int i = 0; i <= cities; i++) if(clusters[0] == clusters[i]) fprintf(results, "%d ", i + 1);
     while(cluster_head[j] != 0){
         fprintf(results, "\nCluster: ");
          for(int i = 0; i <= cities; i++){
