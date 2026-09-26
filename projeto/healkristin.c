@@ -231,11 +231,11 @@ void QuestsMan(FILE* results, FILE* quests, int* cluster_head, int cluster_count
             case 2:
                  Task2(cluster_head, cluster_counter, cities, clusters, results);
                  break;
-            //coming soon (im here baby ;;;))))))
+            //coming soon (im here baby ;;;)))))) LEEEEEEEESSSSSSSSSS GOOOOOOOOOOOOOO
             case 3:
                 Task3(quests, Cities, cities, clusters, results);
                 break;
-            //task4 coming soon...
+            //task4 coming soon... fds despachate la
         }
          while((h = fgetc(quests)) != '\n' && h != EOF);
     }
