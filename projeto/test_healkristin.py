@@ -61,20 +61,20 @@ SOURCE_FILE = "healkristin.c"     # path to the C source to compile
 BUILD_DIR   = "build"             # where the compiled binary goes
 WORK_DIR    = "runs"              # scratch dir, one subfolder per test
 
-MIN_NAME_LEN = 1        # random .quests/.map/.position base filenames are
-MAX_NAME_LEN = 50        # generated with lengths in this range
+MIN_NAME_LEN = 3        # random .quests/.map/.position base filenames are
+MAX_NAME_LEN = 12        # generated with lengths in this range
 SAME_BASENAME_PROB = 0.5  # chance all three files share one random base
                            # name, vs. each getting its own random name
 
 # --- Randomisation ranges: edit these two to control test size ----------
-MIN_CITIES  = 1       # smallest number of cities (C) to generate.
-MAX_CITIES  = 20       # <-- set this to whatever you want to stress-test
+MIN_CITIES  = 1        # smallest number of cities (C) to generate.
+MAX_CITIES  = 30        # <-- set this to whatever you want to stress-test
 MIN_LINKS   = 0        # smallest number of physical links (L) to generate.
-MAX_LINKS   = 30        # <-- "map size"; set this too
+MAX_LINKS   = 40        # <-- "map size"; set this too
 
 MAX_COORD   = 50       # .position plane is randomised as Xmax,Ymax in [1, MAX_COORD]
 
-NUM_TESTS   = 250        # how many random cases to run this session
+NUM_TESTS   = 25        # how many random cases to run this session
 TIMEOUT_SEC = 5         # kill a run that hangs longer than this (seconds)
 SEED        = None      # int for reproducible runs, or None for fresh randomness
 
@@ -88,7 +88,14 @@ VALGRIND_LOG_CHARS = 4000    # truncate a very long valgrind report when printin
 
 ALL_TASKS = [1, 2, 3, 4, 5, 6]           # tasks defined in the statement
 TASK_NEEDS_ARG = {1: False, 2: False, 3: True, 4: True, 5: False, 6: True}
-CHECKABLE_TASKS = {1, 2}                 # tasks this harness knows how to grade
+CHECKABLE_TASKS = {1, 2, 3}              # tasks this harness knows how to grade
+
+MIN_TASK_REPEATS = 1   # a selected task line may appear this many times...
+MAX_TASK_REPEATS = 3   # ...up to this many times in one .quests file, each
+                        # occurrence with its own random argument (e.g. two
+                        # different "Task3 <city>" queries in the same run) -
+                        # this is legal per the statement and worth fuzzing,
+                        # especially for the argument-taking tasks (3/4/6).
 
 # ==========================================================================
 
@@ -158,7 +165,7 @@ def prompt_task_selection():
 def compile_program(source_path: Path, build_dir: Path) -> Path:
     build_dir.mkdir(parents=True, exist_ok=True)
     binary_path = build_dir / "healkristin"
-    cmd = ["gcc", "-Wall", "-O2", "-o", str(binary_path), str(source_path)]
+    cmd = ["gcc", "-Wall", "-O2", "-o", str(binary_path), str(source_path), "-lm"]
     print(f"  $ {' '.join(shlex.quote(a) for a in cmd)}")
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.stdout:
@@ -217,6 +224,47 @@ def expected_block_task2(clusters):
     return "\n".join(lines)
 
 
+def city_to_cluster_map(clusters):
+    """Maps each city id to the index of the cluster (in `clusters`) it
+    belongs to, so membership can be checked in O(1) instead of scanning
+    every cluster list."""
+    mapping = {}
+    for idx, cl in enumerate(clusters):
+        for c in cl:
+            mapping[c] = idx
+    return mapping
+
+
+def closest_outside_cluster(cities, clusters, positions, ref):
+    """Reference solution for Task3: nearest city (by squared Euclidean
+    distance, which preserves ordering without needing floats/rounding)
+    that is NOT in the same cluster as `ref`. Returns -2 for the "problema
+    mal definido" cases from section 4.1 (bad ref city, or only one
+    cluster in the whole map). Ties are broken by smallest city id, which
+    matches the natural result of scanning cities in increasing order and
+    only replacing the best candidate on a strictly smaller distance."""
+    if ref < 1 or ref > cities:
+        return -2
+    cluster_of = city_to_cluster_map(clusters)
+    ref_cluster = cluster_of[ref]
+    rx, ry = positions[ref]
+    best_city, best_dist2 = None, None
+    for c in range(1, cities + 1):
+        if cluster_of[c] == ref_cluster:
+            continue
+        x, y = positions[c]
+        d2 = (x - rx) ** 2 + (y - ry) ** 2
+        if best_dist2 is None or d2 < best_dist2:
+            best_dist2 = d2
+            best_city = c
+    return best_city if best_city is not None else -2
+
+
+def expected_block_task3(clusters, positions, cities, arg):
+    ans = closest_outside_cluster(cities, clusters, positions, arg)
+    return f"Task3 {arg} {ans}"
+
+
 # ------------------------------ Generation --------------------------------
 
 def random_name():
@@ -255,21 +303,25 @@ def generate_position(cities, max_coord):
     xmax = random.randint(1, max_coord)
     ymax = random.randint(1, max_coord)
     lines = [f"{xmax} {ymax}"]
+    positions = {}
     for city in range(1, cities + 1):
         x = random.randint(1, xmax)
         y = random.randint(1, ymax)
+        positions[city] = (x, y)
         lines.append(f"{city} {x} {y}")
-    return "\n".join(lines) + "\n"
+    return "\n".join(lines) + "\n", positions
 
 
 def generate_quests(cities, selected_tasks):
     tasks = []
     for n in selected_tasks:
-        if TASK_NEEDS_ARG[n]:
-            arg = random.randint(1, cities) if cities >= 1 else 0
-            tasks.append(f"Task{n} {arg}")
-        else:
-            tasks.append(f"Task{n}")
+        repeats = random.randint(MIN_TASK_REPEATS, MAX_TASK_REPEATS)
+        for _ in range(repeats):
+            if TASK_NEEDS_ARG[n]:
+                arg = random.randint(1, cities) if cities >= 1 else 0
+                tasks.append(f"Task{n} {arg}")
+            else:
+                tasks.append(f"Task{n}")
     random.shuffle(tasks)
     return "\n".join(tasks) + "\n", tasks
 
@@ -344,18 +396,22 @@ def print_valgrind_log(log_path):
 
 # ------------------------------- Checking -----------------------------------
 
-def build_expected(quest_lines, clusters):
+def build_expected(quest_lines, clusters, positions, cities):
     """Builds the reference .results content for the tasks we can verify
-    (Task1, Task2), in the order they appear in the .quests file, blocks
-    separated by one blank line, per section 4 of the statement."""
+    (Task1, Task2, Task3), in the order they appear in the .quests file,
+    blocks separated by one blank line, per section 4 of the statement."""
     blocks = []
     for line in quest_lines:
-        name = line.split()[0]
+        parts = line.split()
+        name = parts[0]
         if name == "Task1":
             blocks.append(expected_block_task1(clusters))
         elif name == "Task2":
             blocks.append(expected_block_task2(clusters))
-        # Task3/Task4/etc: not implemented yet, nothing to check.
+        elif name == "Task3":
+            arg = int(parts[1])
+            blocks.append(expected_block_task3(clusters, positions, cities, arg))
+        # Task4/5/6: not implemented yet, nothing to check.
     return "\n\n".join(blocks)
 
 
@@ -376,14 +432,14 @@ def locate_first_diff(expected_stripped, actual_stripped):
     return None, None, None  # identical (shouldn't happen if caller already checked)
 
 
-def check_case(actual_text, quest_lines, clusters):
+def check_case(actual_text, quest_lines, clusters, positions, cities):
     """Returns (verdict, diff_text_or_None, location_or_None).
-    Compares only the Task1/Task2 content: we pull those blocks out of the
-    actual output (in the order they appear) and diff them against the
-    reference, so the check still works even if the file also contains
+    Compares only the Task1/Task2/Task3 content: we pull those blocks out
+    of the actual output (in the order they appear) and diff them against
+    the reference, so the check still works even if the file also contains
     stray/misplaced blocks - the harness will surface that misalignment as
     a mismatch. location is (line_number, expected_line, actual_line)."""
-    expected = build_expected(quest_lines, clusters)
+    expected = build_expected(quest_lines, clusters, positions, cities)
 
     actual_stripped = actual_text.strip("\n")
     expected_stripped = expected.strip("\n")
@@ -462,7 +518,10 @@ def main():
 
         cities = random.randint(MIN_CITIES, MAX_CITIES)
         map_text, edges, links = generate_map(cities, MIN_LINKS, MAX_LINKS)
-        position_text = generate_position(cities, MAX_COORD) if cities >= 1 else "1 1\n"
+        if cities >= 1:
+            position_text, positions = generate_position(cities, MAX_COORD)
+        else:
+            position_text, positions = "1 1\n", {}
         quests_text, quest_lines = generate_quests(cities, selected_tasks)
 
         map_path.write_text(map_text)
@@ -512,7 +571,7 @@ def main():
             break
 
         clusters = correct_clusters(cities, edges) if cities >= 1 else []
-        verdict, diff, location = check_case(actual_text, quest_lines, clusters)
+        verdict, diff, location = check_case(actual_text, quest_lines, clusters, positions, cities)
         tally[verdict] += 1
 
         if verdict == "OK":
