@@ -113,7 +113,7 @@ for(int i = 0; i < cities; i++){
 
  int cluster_counter = ClusterMan(clusters, cities, cluster_head, operations);
 
- QuestsMan( results,  quests,  cluster_head,  cluster_counter,  cities,  clusters, Cities);
+ QuestsMan(results,  quests,  cluster_head,  cluster_counter,  cities,  clusters, Cities);
 
     fclose(map);
     fclose(quests);
@@ -174,6 +174,8 @@ for (int i = 0; i < cities; i++) cluster_head[i] = 0;
 void Task1(int cluster_counter, FILE* results){
 
     fprintf(results, "Task1 %d\n\n", cluster_counter);
+    
+    return;
 }
 
 void Task2(int* cluster_head, int cluster_counter, int cities, int* clusters, FILE* results){
@@ -193,6 +195,8 @@ void Task2(int* cluster_head, int cluster_counter, int cities, int* clusters, FI
         j++;
     }
  fprintf(results, "\n\n");
+
+ return;
 }
 
 void Task3(FILE* quests, City *Cities, int cities, int* clusters, FILE* results){
@@ -235,5 +239,7 @@ void QuestsMan(FILE* results, FILE* quests, int* cluster_head, int cluster_count
         }
          while((h = fgetc(quests)) != '\n' && h != EOF);
     }
+
+    return;
    
 }
