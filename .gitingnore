@@ -6,6 +6,8 @@ healkristin
 *.map
 *.position
 *.quests
+*.txt
+*.xlsx
 
 # Ignorar pastas de sistema
 .vscode/
