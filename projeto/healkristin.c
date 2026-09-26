@@ -128,7 +128,7 @@ for(int i = 0; i < cities; i++){
 
 int ClusterMan(int* clusters, int cities, int* cluster_head, int operations){
  
-if(operations >= 0){
+if(operations > 0){
 for (int i = 0; i < cities; i++) cluster_head[i] = 0; 
  int temp_ = 0;
  int found = 0;
