@@ -4,11 +4,19 @@
 #include <ctype.h>
 #include <stdbool.h>
 #include <unistd.h>
+#include <math.h>
+
+typedef struct{
+    int x;
+    int y;
+    int city_number;
+} City;
 
 int ClusterMan(int* clusters, int cities, int* cluster_head, int operations);
-void QuestsMan(FILE* results, FILE* quests, int* cluster_head, int cluster_counter, int cities, int* clusters);
+void QuestsMan(FILE* results, FILE* quests, int* cluster_head, int cluster_counter, int cities, int* clusters, City *Cities);
 void Task1(int cluster_counter, FILE* results);
 void Task2(int* cluster_head, int cluster_counter,int cities, int* clusters, FILE* results);
+
 
 
 int main(int argc, char **argv){
@@ -60,11 +68,11 @@ int cities = 0;
  //contagem do número de cidades
 
  int operations;
- fscanf(map, "%d %d", &cities, &operations);
+ if(fscanf(map, "%d %d", &cities, &operations) != 2)exit(EXIT_FAILURE);
  if(cities <= 0 || operations < 0)exit(EXIT_FAILURE);
  
  //agrupamento em clusters
- int clusters[cities];
+ int clusters[cities]; 
  for(int i = 0; i < cities; i++) clusters[i] = i + 1;
  
  int p,q,r;
@@ -78,7 +86,26 @@ int cities = 0;
  }
  rewind(map);
   
+ //guardar informações do position
+ int X_max, Y_max;
+ if(fscanf(position, "%d %d", &X_max, &Y_max) != 2)exit(EXIT_FAILURE);
+ if(X_max <= 0 || Y_max <= 0)exit(EXIT_FAILURE);
+
+ City Cities[cities];
+ int num, x, y;
+for(int i = 0; i < cities; i++){
+    if(fscanf(position, "%d %d %d", &num, &x, &y) != 3) exit(EXIT_FAILURE);
+    
+    if(num < 1 || num > cities || x <= 0 || y <= 0 || x > X_max || y > Y_max)exit(EXIT_FAILURE);
+    
+    Cities[num - 1].city_number = num;
+    Cities[num - 1].x = x;
+    Cities[num - 1].y = y;
+}
  
+
+
+
  
  
  int cluster_head[cities];
@@ -86,9 +113,13 @@ int cities = 0;
 
  int cluster_counter = ClusterMan(clusters, cities, cluster_head, operations);
 
- QuestsMan( results,  quests,  cluster_head,  cluster_counter,  cities,  clusters);
+ QuestsMan( results,  quests,  cluster_head,  cluster_counter,  cities,  clusters, Cities);
 
- return 0;
+    fclose(map);
+    fclose(quests);
+    fclose(position);
+    fclose(results);
+    return 0;
  
 }
 
@@ -164,7 +195,28 @@ void Task2(int* cluster_head, int cluster_counter, int cities, int* clusters, FI
  fprintf(results, "\n\n");
 }
 
-void QuestsMan(FILE* results, FILE* quests, int* cluster_head, int cluster_counter, int cities, int* clusters){
+void Task3(FILE* quests, City *Cities, int cities, int* clusters, FILE* results){
+    int city_ref, cluster_ref;
+    double best_distance = -1; //nao existe ainda nao foi encontrado
+    int closest_city = -2; //mesmo motivo que acima mas caso tudo pertença ao mesmo cluster ja temos que é -2 como pedido
+    if(fscanf(quests, " %d", &city_ref) != 1) exit(EXIT_FAILURE);
+    if(city_ref >= 1 && city_ref <= cities){ 
+        cluster_ref = clusters[city_ref - 1];
+        for(int i = 0; i < cities;i++){
+            if(clusters[i] == cluster_ref) continue;
+            int dy = Cities[city_ref -1].y - Cities[i].y; 
+            int dx = Cities[city_ref -1].x - Cities[i].x;
+            double distance = (double) sqrt((dy*dy)+(dx*dx));
+            if(best_distance == -1 || distance < best_distance){
+            best_distance = distance;
+            closest_city = Cities[i].city_number;
+            }
+        }
+    }
+    fprintf(results, "Task3 %d %d\n\n", city_ref, closest_city);
+}
+
+void QuestsMan(FILE* results, FILE* quests, int* cluster_head, int cluster_counter, int cities, int* clusters, City *Cities){
     int quest = 0;
     int h;
     while ((fscanf(quests, "Task%d", &quest) == 1)){
@@ -175,7 +227,11 @@ void QuestsMan(FILE* results, FILE* quests, int* cluster_head, int cluster_count
             case 2:
                  Task2(cluster_head, cluster_counter, cities, clusters, results);
                  break;
-            //coming soon
+            //coming soon (im here baby ;;;))))))
+            case 3:
+                Task3(quests, Cities, cities, clusters, results);
+                break;
+            //task4 coming soon...
         }
          while((h = fgetc(quests)) != '\n' && h != EOF);
     }
