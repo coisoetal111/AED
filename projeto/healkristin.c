@@ -71,6 +71,7 @@ int cities = 0;
     
  for(int i = 0; i < operations; i++){
     if(fscanf(map, "%d %d", &p, &q) != 2) exit(EXIT_FAILURE);
+    if(p < 1 || p > cities || q < 1 || q > cities) exit(EXIT_FAILURE);
     if(clusters[p - 1] == clusters[q - 1]) continue; 
     r = clusters[q - 1];
     for(int i = 0; i < cities; i++) if(clusters[i] == r) clusters[i] = clusters[p - 1];
@@ -150,10 +151,10 @@ void Task2(int* cluster_head, int cluster_counter, int cities, int* clusters, FI
     
     fprintf(results, "Task2 %d", cluster_counter);
     fprintf(results, "\nCluster: ");
-    for(int i = 0; i <= cities; i++) if(clusters[0] == clusters[i]) fprintf(results, "%d ", i + 1);
+    for(int i = 0; i < cities; i++) if(clusters[0] == clusters[i]) fprintf(results, "%d ", i + 1);
     while(cluster_head[j] != 0){
         fprintf(results, "\nCluster: ");
-         for(int i = 0; i <= cities; i++){
+         for(int i = 0; i < cities; i++){
             if(clusters[i] == cluster_head[j]){
                 fprintf(results, "%d ", i + 1);
             }
