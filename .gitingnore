@@ -11,4 +11,5 @@ healkristin
 
 # Ignorar pastas de sistema
 .vscode/
-build/
+projeto/build/
+projeto/.vscode/
