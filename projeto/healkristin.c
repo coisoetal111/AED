@@ -141,14 +141,14 @@ for (int i = 0; i < cities; i++) cluster_head[i] = 0;
 
 void Task1(int cluster_counter, FILE* results){
 
-    fprintf(results, "\nTask1 %d", cluster_counter);
+    fprintf(results, "Task1 %d\n\n", cluster_counter);
 }
 
 void Task2(int* cluster_head, int cluster_counter, int cities, int* clusters, FILE* results){
 
-    int j = 1;
+    int j = 0;
     
-    fprintf(results, "\n\nTask2 %d", cluster_counter);
+    fprintf(results, "Task2 %d", cluster_counter);
     fprintf(results, "\nCluster: ");
     for(int i = 0; i <= cities; i++) if(clusters[0] == clusters[i]) fprintf(results, "%d ", i + 1);
     while(cluster_head[j] != 0){
@@ -160,7 +160,7 @@ void Task2(int* cluster_head, int cluster_counter, int cities, int* clusters, FI
         }
         j++;
     }
-
+ fprintf(results, "\n\n");
 }
 
 void QuestsMan(FILE* results, FILE* quests, int* cluster_head, int cluster_counter, int cities, int* clusters){
