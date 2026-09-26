@@ -36,6 +36,17 @@ crashes - their output isn't graded until you extend `build_expected`.
 Usage:
     python3 test_healkristin.py           run without valgrind (default)
     python3 test_healkristin.py -v        also run every case under valgrind
+    python3 test_healkristin.py --hell    one single, gigantic stress case
+                                           (tens of thousands of cities,
+                                           hundreds of thousands of links,
+                                           filenames right at the Windows
+                                           255-character filename limit)
+                                           instead of NUM_TESTS normal ones
+    python3 test_healkristin.py -e        performance sweep: times the binary
+                                           across a fixed, growing sequence of
+                                           sizes and writes an Excel workbook
+                                           of tables/charts (opened for you
+                                           when it's done) - see EXEL_* below
     python3 test_healkristin.py -h        list the flags and what they do,
                                            without compiling or running anything
     (then answer the "which tasks" prompt, e.g. "1 2 4", or just press
@@ -52,6 +63,7 @@ import shlex
 import shutil
 import string
 import subprocess
+import time
 import sys
 from pathlib import Path
 
@@ -97,6 +109,47 @@ MAX_TASK_REPEATS = 3   # ...up to this many times in one .quests file, each
                         # this is legal per the statement and worth fuzzing,
                         # especially for the argument-taking tasks (3/4/6).
 
+# --- --hell mode: one single, absolutely huge case ------------------------
+HELL_MIN_CITIES = 20_000    # "tens of thousands of cities"
+HELL_MAX_CITIES = 50_000
+HELL_MIN_LINKS  = 100_000   # "hundreds of thousands of links"
+HELL_MAX_LINKS  = 400_000
+HELL_MAX_COORD  = 1_000_000_000  # huge coordinate range -> a much heavier
+                                   # .position file (one line per city, with
+                                   # up to 10-digit numbers on each line)
+HELL_TIMEOUT_SEC = 120            # native run gets a lot more time...
+HELL_VALGRIND_TIMEOUT_SEC = 900   # ...and even more under valgrind, which
+                                   # will be dramatically slower at this size
+
+# Windows/NTFS allows at most 255 characters in a single filename component
+# (this applies per path segment, separately from the older 260-char
+# MAX_PATH limit on the full path). Hell mode sizes each basename so the
+# resulting filename lands EXACTLY at that limit - as long as a name can
+# legally be. The .quests basename also has to leave room for the derived
+# ".results" file (8 chars, one longer than ".quests" itself), or the
+# .results file the program creates would itself be one character too long.
+WINDOWS_MAX_COMPONENT_LEN = 255
+EXT_QUESTS, EXT_MAP, EXT_POSITION, EXT_RESULTS = ".quests", ".map", ".position", ".results"
+
+# --- -e/--exel mode: timed performance sweep ------------------------------
+# One fixed, growing sequence of sizes (cities == links at every point):
+#   10 -> 50   step 5     (10,15,...,50)
+#   60 -> 200  step 10    (60,70,...,200)
+#   300 -> 1000 step 100  (300,400,...,1000)
+#   2000 -> 50000 step 1000 (2000,3000,...,50000)
+# The .quests content is fixed (built once from your task selection, with
+# every argument-taking task pinned to city 1, which always exists) and
+# reused byte-for-byte at every size AND every repeat, and the .map/.position
+# content for a given size is also generated only once and reused across
+# every repeat - so "run 1", "run 2", ... "run N" are always timing the exact
+# same input, isolating run-to-run system noise rather than data variance.
+EXEL_MAX_COORD = 1000        # .position plane for the sweep (doesn't need to
+                              # be gigantic here - HELL_MAX_COORD covers that)
+EXEL_TIMEOUT_SEC = 60         # per-execution timeout during the sweep
+EXEL_DEFAULT_REPEATS = 5      # used when the user just presses Enter
+EXEL_MAX_OBJECTS_PER_SHEET = 10  # a table + its chart = 2 objects per run,
+                                  # so at most 5 runs' worth per sheet/"Page"
+
 # ==========================================================================
 
 
@@ -114,6 +167,28 @@ def parse_args():
             "also run every test case under valgrind's memcheck "
             "(invalid reads/writes, leaks). Off by default, since it's "
             "much slower. Ignored (with a warning) if valgrind isn't installed."
+        ),
+    )
+    parser.add_argument(
+        "--hell",
+        action="store_true",
+        help=(
+            "stress-test absolute limits instead of the normal suite: one "
+            "single case with tens of thousands of cities, hundreds of "
+            "thousands of links, a huge .position file, and filenames sized "
+            "right up to the Windows/NTFS 255-character filename limit. "
+            "Can be combined with -v, but that will be very slow."
+        ),
+    )
+    parser.add_argument(
+        "-e", "--exel",
+        action="store_true",
+        help=(
+            "performance sweep instead of the normal suite: times the binary "
+            "across a fixed, growing sequence of sizes (10 up to 50000), "
+            "repeated a number of times you choose, and writes an Excel "
+            "workbook of per-run tables/charts, opened automatically when "
+            "done. Ignores -v (valgrind would swamp the timing)."
         ),
     )
     # -h/--help is added automatically by argparse: it prints the flags
@@ -285,6 +360,27 @@ def random_basenames():
     return random_name(), random_name(), random_name()
 
 
+def hell_random_name(length):
+    """Same shape as random_name(), but with an exact requested length."""
+    first = random.choice(string.ascii_lowercase)
+    rest = "".join(random.choices(string.ascii_letters + string.digits, k=length - 1))
+    return first + rest
+
+
+def hell_basenames():
+    """One basename per file (never shared), each sized so its filename
+    lands exactly at the 255-character Windows/NTFS limit - as long as a
+    name can legally be without tipping over it."""
+    quests_len = WINDOWS_MAX_COMPONENT_LEN - max(len(EXT_QUESTS), len(EXT_RESULTS))
+    map_len = WINDOWS_MAX_COMPONENT_LEN - len(EXT_MAP)
+    position_len = WINDOWS_MAX_COMPONENT_LEN - len(EXT_POSITION)
+    return (
+        hell_random_name(quests_len),
+        hell_random_name(map_len),
+        hell_random_name(position_len),
+    )
+
+
 def generate_map(cities, min_links, max_links):
     links = random.randint(min_links, max_links)
     edges = []
@@ -328,7 +424,8 @@ def generate_quests(cities, selected_tasks):
 
 # ------------------------------ Execution ----------------------------------
 
-def run_case(binary_path: Path, case_dir: Path, quests_base, map_base, position_base, use_valgrind):
+def run_case(binary_path: Path, case_dir: Path, quests_base, map_base, position_base,
+             use_valgrind, timeout_override=None):
     quests_f = f"{quests_base}.quests"
     map_f = f"{map_base}.map"
     position_f = f"{position_base}.position"
@@ -353,11 +450,14 @@ def run_case(binary_path: Path, case_dir: Path, quests_base, map_base, position_
     else:
         argv = prog_argv
         timeout = TIMEOUT_SEC
+    if timeout_override is not None:
+        timeout = timeout_override
 
     shell_cmd = " ".join(shlex.quote(a) for a in argv)
     print(f"  $ cd {shlex.quote(str(case_dir))} && {shell_cmd}")
 
     try:
+        t0 = time.perf_counter()
         proc = subprocess.run(
             argv,
             cwd=case_dir,
@@ -365,20 +465,22 @@ def run_case(binary_path: Path, case_dir: Path, quests_base, map_base, position_
             text=True,
             timeout=timeout,
         )
+        elapsed = time.perf_counter() - t0
     except subprocess.TimeoutExpired:
-        return "TIMEOUT", None, "", "", log_path
+        elapsed = time.perf_counter() - t0
+        return "TIMEOUT", None, "", "", log_path, elapsed
 
     if proc.returncode < 0:
         sig = -proc.returncode
-        return f"CRASH (signal {sig})", None, proc.stdout, proc.stderr, log_path
+        return f"CRASH (signal {sig})", None, proc.stdout, proc.stderr, log_path, elapsed
 
     if use_valgrind and proc.returncode == VALGRIND_ERROR_EXITCODE:
-        return "VALGRIND_ERROR", None, proc.stdout, proc.stderr, log_path
+        return "VALGRIND_ERROR", None, proc.stdout, proc.stderr, log_path, elapsed
 
     if not results_f.exists():
-        return "NO_RESULTS_FILE", None, proc.stdout, proc.stderr, log_path
+        return "NO_RESULTS_FILE", None, proc.stdout, proc.stderr, log_path, elapsed
 
-    return "RAN", results_f.read_text(), proc.stdout, proc.stderr, log_path
+    return "RAN", results_f.read_text(), proc.stdout, proc.stderr, log_path, elapsed
 
 
 def print_valgrind_log(log_path):
@@ -462,6 +564,363 @@ def check_case(actual_text, quest_lines, clusters, positions, cities):
 
 # --------------------------------- Main --------------------------------------
 
+def run_and_report_case(binary_path, case_dir, quests_path, map_path, position_path,
+                         quests_base, map_base, position_base,
+                         cities, edges, quest_lines, positions,
+                         use_valgrind, timeout_override=None):
+    """Runs one case, prints its outcome, and on anything other than OK
+    prints the diagnostic block (diff/location/valgrind log/repro command).
+    Returns one of the tally keys: OK / MISMATCH / CRASH / VALGRIND_ERROR /
+    TIMEOUT / NO_RESULTS_FILE."""
+    status, actual_text, stdout, stderr, log_path, elapsed = run_case(
+        binary_path, case_dir, quests_base, map_base, position_base,
+        use_valgrind, timeout_override=timeout_override,
+    )
+
+    if status.startswith("CRASH") or status == "TIMEOUT":
+        kind = "CRASH" if status.startswith("CRASH") else "TIMEOUT"
+        print(f"  -> {status}  (time: {elapsed:.4f}s)")
+        if stderr.strip():
+            print(f"  stderr: {stderr.strip()[:300]}")
+        print_valgrind_log(log_path)
+        print_failure_location(
+            case_dir, quests_path, map_path, position_path, None, binary_path
+        )
+        return kind
+
+    if status == "VALGRIND_ERROR":
+        print(f"  -> VALGRIND_ERROR (memcheck found invalid reads/writes and/or leaks)  (time: {elapsed:.4f}s)")
+        print_valgrind_log(log_path)
+        print_failure_location(
+            case_dir, quests_path, map_path, position_path, None, binary_path
+        )
+        return "VALGRIND_ERROR"
+
+    if status == "NO_RESULTS_FILE":
+        print(f"  -> NO RESULTS FILE produced  (time: {elapsed:.4f}s)")
+        print_valgrind_log(log_path)
+        print_failure_location(
+            case_dir, quests_path, map_path, position_path, None, binary_path
+        )
+        return "NO_RESULTS_FILE"
+
+    clusters = correct_clusters(cities, edges) if cities >= 1 else []
+    verdict, diff, location = check_case(actual_text, quest_lines, clusters, positions, cities)
+
+    if verdict == "OK":
+        print(f"  -> OK  (time: {elapsed:.4f}s)")
+    else:
+        results_path = case_dir / f"{quests_base}.results"
+        print(f"  -> MISMATCH  (time: {elapsed:.4f}s)")
+        if VERBOSE_DIFF:
+            print(diff)
+        if location and location[0] is not None:
+            line_no, exp_line, act_line = location
+            print(f"\n  First divergence at output line {line_no}:")
+            print(f"    expected: {exp_line!r}")
+            print(f"    actual:   {act_line!r}")
+        print_valgrind_log(log_path)
+        print_failure_location(
+            case_dir, quests_path, map_path, position_path, results_path, binary_path
+        )
+    return verdict
+
+
+def run_hell_mode(binary_path, work_dir, selected_tasks, use_valgrind):
+    cities = random.randint(HELL_MIN_CITIES, HELL_MAX_CITIES)
+    timeout = HELL_VALGRIND_TIMEOUT_SEC if use_valgrind else HELL_TIMEOUT_SEC
+
+    print("=====================================================")
+    print("HELL MODE: one absolutely huge case")
+    print(f"  cities target range   : [{HELL_MIN_CITIES}, {HELL_MAX_CITIES}]")
+    print(f"  links target range    : [{HELL_MIN_LINKS}, {HELL_MAX_LINKS}]")
+    print(f"  coordinate range      : [1, {HELL_MAX_COORD}]")
+    print(f"  filenames sized to    : {WINDOWS_MAX_COMPONENT_LEN}-char Windows/NTFS limit")
+    print(f"  timeout               : {timeout}s")
+    print("=====================================================\n")
+
+    case_dir = work_dir / "hell_case"
+    case_dir.mkdir()
+
+    quests_base, map_base, position_base = hell_basenames()
+    quests_path = case_dir / f"{quests_base}.quests"
+    map_path = case_dir / f"{map_base}.map"
+    position_path = case_dir / f"{position_base}.position"
+    for label, base, path in (
+        ("quests", quests_base, quests_path),
+        ("map", map_base, map_path),
+        ("position", position_base, position_path),
+    ):
+        print(f"  {label} filename: {len(path.name)} chars -> {path.name}")
+
+    print("\nGenerating map...")
+    map_text, edges, links = generate_map(cities, HELL_MIN_LINKS, HELL_MAX_LINKS)
+    print("Generating position...")
+    position_text, positions = generate_position(cities, HELL_MAX_COORD)
+    print("Generating quests...")
+    quests_text, quest_lines = generate_quests(cities, selected_tasks)
+
+    map_path.write_text(map_text)
+    position_path.write_text(position_text)
+    quests_path.write_text(quests_text)
+    print(
+        f"Actual sizes: cities={cities} links={links} "
+        f".map={map_path.stat().st_size:,}B "
+        f".position={position_path.stat().st_size:,}B\n"
+    )
+
+    verdict = run_and_report_case(
+        binary_path, case_dir, quests_path, map_path, position_path,
+        quests_base, map_base, position_base,
+        cities, edges, quest_lines, positions,
+        use_valgrind, timeout_override=timeout,
+    )
+
+    print("\n===================== SUMMARY =====================")
+    print(f"hell case: {verdict}")
+    if verdict == "OK":
+        shutil.rmtree(case_dir)
+        print(f"Passed - {work_dir} has been cleaned up.")
+        if work_dir.exists() and not any(work_dir.iterdir()):
+            work_dir.rmdir()
+    else:
+        print(f"Files kept at: {case_dir}")
+    print("=====================================================")
+
+
+# ------------------------------ -e/--exel mode ------------------------------
+
+def exel_size_sequence():
+    """The fixed size sequence swept by --exel (cities == links at each point)."""
+    sizes = list(range(10, 51, 5))          # 10, 15, ..., 50
+    sizes += list(range(60, 201, 10))       # 60, 70, ..., 200
+    sizes += list(range(300, 1001, 100))    # 300, 400, ..., 1000
+    sizes += list(range(2000, 50001, 1000)) # 2000, 3000, ..., 50000
+    return sizes
+
+
+def build_fixed_quests_text(selected_tasks):
+    """Builds ONE .quests content, reused unchanged at every size and every
+    repeat. Argument-taking tasks are pinned to city 1, which exists at
+    every size in the sweep (the smallest is 10 cities), so the content
+    never needs to change - only the .map/.position vary between sizes."""
+    lines = []
+    for n in selected_tasks:
+        lines.append(f"Task{n} 1" if TASK_NEEDS_ARG[n] else f"Task{n}")
+    return "\n".join(lines) + "\n"
+
+
+def prompt_exel_repeats():
+    raw = input(
+        f"How many times should the full sweep run? "
+        f"(default {EXEL_DEFAULT_REPEATS}, press Enter to accept): "
+    ).strip()
+    if not raw:
+        return EXEL_DEFAULT_REPEATS
+    try:
+        n = int(raw)
+        if n <= 0:
+            raise ValueError
+        return n
+    except ValueError:
+        print(f"Not a valid positive number, defaulting to {EXEL_DEFAULT_REPEATS}.")
+        return EXEL_DEFAULT_REPEATS
+
+
+def open_file_in_default_app(path):
+    try:
+        if sys.platform.startswith("win"):
+            os.startfile(str(path))  # type: ignore[attr-defined]
+        elif sys.platform == "darwin":
+            subprocess.run(["open", str(path)], check=False)
+        else:
+            subprocess.run(["xdg-open", str(path)], check=False)
+    except Exception as e:
+        print(f"Could not auto-open the workbook ({e}). Open it manually: {path}")
+
+
+def run_exel_mode(binary_path, work_dir, selected_tasks, root):
+    try:
+        import openpyxl
+        from openpyxl.chart import ScatterChart, Series, Reference
+        from openpyxl.styles import Font
+        from openpyxl.utils import get_column_letter
+    except ImportError:
+        print(
+            "The --exel/-e flag needs the 'openpyxl' package, which isn't "
+            "installed. Install it with:\n    pip install openpyxl\nand run "
+            "again."
+        )
+        sys.exit(1)
+
+    sizes = exel_size_sequence()
+    repeats = prompt_exel_repeats()
+    quests_text = build_fixed_quests_text(selected_tasks)
+
+    print(
+        f"\nSweeping {len(sizes)} sizes (10 -> 50000) x {repeats} repeat(s) "
+        f"= {len(sizes) * repeats} runs of the binary. Fixed .quests content:"
+    )
+    for line in quests_text.splitlines():
+        print(f"    {line}")
+    print()
+
+    # Generate each size's .map/.position ONCE, reused identically for every
+    # repeat, so "run 1" .. f"run {repeats}" all time the exact same input.
+    content_cache = {}
+    for size in sizes:
+        map_text, edges, links = generate_map(size, size, size)
+        position_text, positions = generate_position(size, EXEL_MAX_COORD)
+        content_cache[size] = (map_text, position_text)
+
+    # run_index -> list of (size, elapsed_seconds_or_None)
+    run_results = {r: [] for r in range(1, repeats + 1)}
+
+    for size in sizes:
+        map_text, position_text = content_cache[size]
+        for run_index in range(1, repeats + 1):
+            basename = str(run_index)
+            case_dir = work_dir / basename
+            case_dir.mkdir(parents=True, exist_ok=True)
+            quests_path = case_dir / f"{basename}.quests"
+            map_path = case_dir / f"{basename}.map"
+            position_path = case_dir / f"{basename}.position"
+
+            quests_path.write_text(quests_text)
+            map_path.write_text(map_text)
+            position_path.write_text(position_text)
+
+            argv = [str(binary_path.resolve()), quests_path.name, map_path.name, position_path.name]
+            print(f"  $ cd {shlex.quote(str(case_dir))} && {' '.join(shlex.quote(a) for a in argv)}")
+
+            elapsed = None
+            try:
+                t0 = time.perf_counter()
+                proc = subprocess.run(
+                    argv, cwd=case_dir, capture_output=True, text=True,
+                    timeout=EXEL_TIMEOUT_SEC,
+                )
+                elapsed = time.perf_counter() - t0
+            except subprocess.TimeoutExpired:
+                print(f"  [run {run_index}] size={size} -> TIMEOUT (> {EXEL_TIMEOUT_SEC}s)")
+            else:
+                if proc.returncode < 0:
+                    print(f"  [run {run_index}] size={size} -> CRASH (signal {-proc.returncode})")
+                    elapsed = None
+                else:
+                    print(f"  [run {run_index}] size={size} -> {elapsed:.4f}s")
+
+            run_results[run_index].append((size, elapsed))
+
+        # this size is done for every repeat - no need to keep its files
+        for run_index in range(1, repeats + 1):
+            case_dir = work_dir / str(run_index)
+            if case_dir.exists():
+                shutil.rmtree(case_dir)
+
+    # ------------------------- build the workbook -------------------------
+    # One shared table per sheet: column A is the size (Cities = Links),
+    # and each run gets its own column right beside it (Run 1, Run 2, ...) -
+    # like your reference layout, rather than a separate table per run.
+    # Each run also gets its own scatter chart, placed in a row to the right
+    # of the table so the charts sit beside each other too. The table
+    # counts as 1 object and each chart as 1 more, so at most
+    # (EXEL_MAX_OBJECTS_PER_SHEET - 1) runs' worth fit per sheet/"Page"
+    # before a new one starts.
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
+
+    header_font = Font(name="Arial", bold=True)
+    normal_font = Font(name="Arial")
+
+    runs_per_sheet = max(1, EXEL_MAX_OBJECTS_PER_SHEET - 1)
+    run_indices = list(range(1, repeats + 1))
+    sheet_groups = [
+        run_indices[i:i + runs_per_sheet]
+        for i in range(0, len(run_indices), runs_per_sheet)
+    ]
+
+    CHART_COL_SPAN = 12  # columns of horizontal spacing between charts
+    CHART_WIDTH, CHART_HEIGHT = 16, 9
+
+    for page_num, group in enumerate(sheet_groups, start=1):
+        sheet = wb.create_sheet(title=f"Page {page_num}")
+
+        header_row = 1
+        first_data_row = 2
+        last_data_row = 1 + len(sizes)
+
+        sheet.cell(row=header_row, column=1, value="Cities = Links").font = header_font
+        sheet.column_dimensions["A"].width = 16
+
+        for j, run_index in enumerate(group):
+            col = 2 + j
+            sheet.cell(row=header_row, column=col, value=f"Run {run_index}").font = header_font
+            sheet.column_dimensions[get_column_letter(col)].width = 12
+
+        for i, size in enumerate(sizes):
+            row = first_data_row + i
+            sheet.cell(row=row, column=1, value=size).font = normal_font
+            for j, run_index in enumerate(group):
+                col = 2 + j
+                elapsed = run_results[run_index][i][1]
+                if elapsed is not None:
+                    sheet.cell(row=row, column=col, value=round(elapsed, 4)).font = normal_font
+                # else: leave blank - a failed (crash/timeout) data point
+
+        charts_start_col = 2 + len(group) + 1  # one blank column after the table
+        x_ref = Reference(sheet, min_col=1, min_row=first_data_row, max_row=last_data_row)
+
+        for j, run_index in enumerate(group):
+            col = 2 + j
+            chart = ScatterChart()
+            chart.title = f"Run {run_index}: time vs. cities/links"
+            chart.x_axis.title = "Cities = Links"
+            chart.y_axis.title = "Time (s)"
+            chart.style = 13
+            chart.displayBlanksAs = "gap"
+            chart.width, chart.height = CHART_WIDTH, CHART_HEIGHT
+
+            y_ref = Reference(sheet, min_col=col, min_row=header_row, max_row=last_data_row)
+            series = Series(y_ref, x_ref, title_from_data=True)
+            series.marker.symbol = "circle"
+            series.graphicalProperties.line.noFill = True  # points only, no connecting line
+            chart.series.append(series)
+
+            anchor_col = charts_start_col + j * CHART_COL_SPAN
+            sheet.add_chart(chart, f"{get_column_letter(anchor_col)}1")
+
+    xlsx_path = root / "exel_results.xlsx"
+    try:
+        wb.save(xlsx_path)
+    except PermissionError:
+        # Almost always means the file is still open (e.g. in Excel) and
+        # the OS has it locked - very common if you re-run right after
+        # opening the previous result. Don't lose this run's data: save
+        # under a fresh name instead of crashing.
+        print(
+            f"\nCouldn't overwrite {xlsx_path.name} - it's likely still open "
+            "in Excel (or another program) and locked. Close it and re-run "
+            "if you want that exact filename; saving this run under a new "
+            "name instead so nothing is lost."
+        )
+        n = 1
+        while True:
+            fallback_path = root / f"exel_results_{n}.xlsx"
+            try:
+                wb.save(fallback_path)
+                xlsx_path = fallback_path
+                break
+            except PermissionError:
+                n += 1
+                if n > 100:  # extremely unlikely, but don't loop forever
+                    print("Could not save the workbook anywhere - giving up.")
+                    return
+    print(f"\nWorkbook written to: {xlsx_path}")
+    print("Opening it now...")
+    open_file_in_default_app(xlsx_path)
+
+
 def main():
     args = parse_args()
 
@@ -479,6 +938,18 @@ def main():
     selected_tasks = prompt_task_selection()
     print(f"Testing tasks: {selected_tasks}\n")
 
+    if args.exel:
+        if args.valgrind:
+            print("Note: -v/--valgrind is ignored under --exel (it would swamp the timing).\n")
+        work_dir = root / WORK_DIR
+        if work_dir.exists():
+            shutil.rmtree(work_dir)
+        work_dir.mkdir()
+        run_exel_mode(binary_path, work_dir, selected_tasks, root)
+        if work_dir.exists() and not any(work_dir.iterdir()):
+            work_dir.rmdir()
+        return
+
     use_valgrind = args.valgrind or USE_VALGRIND_DEFAULT
     if use_valgrind and shutil.which("valgrind") is None:
         print(
@@ -493,6 +964,10 @@ def main():
     if work_dir.exists():
         shutil.rmtree(work_dir)
     work_dir.mkdir()
+
+    if args.hell:
+        run_hell_mode(binary_path, work_dir, selected_tasks, use_valgrind)
+        return
 
     tally = {
         "OK": 0,
@@ -528,69 +1003,22 @@ def main():
         position_path.write_text(position_text)
         quests_path.write_text(quests_text)
 
-        status, actual_text, stdout, stderr, log_path = run_case(
-            binary_path, case_dir, quests_base, map_base, position_base, use_valgrind
-        )
-
         names_note = (
             f"names: {quests_base}.quests {map_base}.map {position_base}.position"
         )
         print(f"[{case_id}] cities={cities} links={links} quests={quest_lines} ({names_note})")
 
-        if status.startswith("CRASH") or status == "TIMEOUT":
-            kind = "CRASH" if status.startswith("CRASH") else "TIMEOUT"
-            tally[kind] += 1
-            print(f"  -> {status}")
-            if stderr.strip():
-                print(f"  stderr: {stderr.strip()[:300]}")
-            print_valgrind_log(log_path)
-            print_failure_location(
-                case_dir, quests_path, map_path, position_path, None, binary_path
-            )
-            stopped_early = True
-            break
-
-        if status == "VALGRIND_ERROR":
-            tally["VALGRIND_ERROR"] += 1
-            print("  -> VALGRIND_ERROR (memcheck found invalid reads/writes and/or leaks)")
-            print_valgrind_log(log_path)
-            print_failure_location(
-                case_dir, quests_path, map_path, position_path, None, binary_path
-            )
-            stopped_early = True
-            break
-
-        if status == "NO_RESULTS_FILE":
-            tally["NO_RESULTS_FILE"] += 1
-            print("  -> NO RESULTS FILE produced")
-            print_valgrind_log(log_path)
-            print_failure_location(
-                case_dir, quests_path, map_path, position_path, None, binary_path
-            )
-            stopped_early = True
-            break
-
-        clusters = correct_clusters(cities, edges) if cities >= 1 else []
-        verdict, diff, location = check_case(actual_text, quest_lines, clusters, positions, cities)
+        verdict = run_and_report_case(
+            binary_path, case_dir, quests_path, map_path, position_path,
+            quests_base, map_base, position_base,
+            cities, edges, quest_lines, positions,
+            use_valgrind,
+        )
         tally[verdict] += 1
 
         if verdict == "OK":
-            print("  -> OK")
             shutil.rmtree(case_dir)  # only successful runs get cleaned up
         else:
-            results_path = case_dir / f"{quests_base}.results"
-            print("  -> MISMATCH")
-            if VERBOSE_DIFF:
-                print(diff)
-            if location and location[0] is not None:
-                line_no, exp_line, act_line = location
-                print(f"\n  First divergence at output line {line_no}:")
-                print(f"    expected: {exp_line!r}")
-                print(f"    actual:   {act_line!r}")
-            print_valgrind_log(log_path)
-            print_failure_location(
-                case_dir, quests_path, map_path, position_path, results_path, binary_path
-            )
             stopped_early = True
             break
 
