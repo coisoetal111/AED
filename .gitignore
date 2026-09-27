@@ -1,0 +1,16 @@
+# Ignorar executaveis do Linux e Windows
+healkristin
+*.exe
+*.out
+*.o
+*.map
+*.position
+*.quests
+*.results
+*.txt
+*.xlsx
+
+# Ignorar pastas de sistema
+.vscode/
+projeto/build/
+projeto/.vscode/
