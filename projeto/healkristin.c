@@ -111,6 +111,7 @@ for(int i = 0; i < cities; i++){
  
  
  int cluster_head[cities];
+ 
 
 
  int cluster_counter = ClusterMan(clusters, cities, cluster_head, operations);
@@ -129,9 +130,10 @@ for(int i = 0; i < cities; i++){
 
 
 int ClusterMan(int* clusters, int cities, int* cluster_head, int operations){
+for (int i = 0; i < cities; i++) cluster_head[i] = 0;
+
+    
  
-if(operations > 0){
-for (int i = 0; i < cities; i++) cluster_head[i] = 0; 
  int temp_ = 0;
  int found = 0;
  int cluster_counter = 1;
@@ -161,14 +163,8 @@ for (int i = 0; i < cities; i++) cluster_head[i] = 0;
     
  
  return cluster_counter;
-}else{
-    int cluster_counter = cities;
-    for (int i = 0; i < cities; i++) cluster_head[i] = i + 1;
-    return cluster_counter;
-
-
 }
-}
+
   
 
 
