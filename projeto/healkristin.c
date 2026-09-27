@@ -16,6 +16,8 @@ int ClusterMan(int* clusters, int cities, int* cluster_head, int operations);
 void QuestsMan(FILE* results, FILE* quests, int* cluster_head, int cluster_counter, int cities, int* clusters, City *Cities);
 void Task1(int cluster_counter, FILE* results);
 void Task2(int* cluster_head, int cluster_counter,int cities, int* clusters, FILE* results);
+void Task3(FILE* quests, City *Cities, int cities, int* clusters, FILE* results);
+void Task4(FILE* quests, City *Cities, int cities, int* clusters, FILE* results);
 
 
 
@@ -211,13 +213,37 @@ void Task3(FILE* quests, City *Cities, int cities, int* clusters, FILE* results)
             int dy = Cities[city_ref -1].y - Cities[i].y; 
             int dx = Cities[city_ref -1].x - Cities[i].x;
             double distance = (double) sqrt((dy*dy)+(dx*dx));
-            if(best_distance == -1 || distance < best_distance){
+            if(best_distance == -1 || distance < best_distance){ //primeira vez ou comparando
             best_distance = distance;
             closest_city = Cities[i].city_number;
             }
         }
     }
     fprintf(results, "Task3 %d %d\n\n", city_ref, closest_city);
+}
+void Task4(FILE* quests, City *Cities, int cities, int* clusters, FILE* results){
+    int city_ref, cluster_ref;
+    double best_distance_cluster = -1;
+    int closest_city_cluster = -2;
+    if(fscanf(quests, " %d", &city_ref) != 1) exit(EXIT_FAILURE);
+    if(city_ref >= 1 && city_ref <= cities){
+        cluster_ref = clusters[city_ref -1];
+        for(int i = 0; i < cities; i++){
+            if(clusters[i] == cluster_ref){
+                for(int j = 0; j < cities; j++){
+                    if(clusters[j] == cluster_ref) continue;
+                    int dy = Cities[i].y - Cities[j].y; 
+                    int dx = Cities[i].x - Cities[j].x;
+                    double distance_cluster = (double) sqrt((dy*dy)+(dx*dx));
+                    if(best_distance_cluster == -1 || distance_cluster < best_distance_cluster){
+                        best_distance_cluster = distance_cluster;
+                        closest_city_cluster = Cities[j].city_number;
+                    }
+                }
+            }
+        }
+    }
+    fprintf(results, "Task4 %d %d\n\n", city_ref, closest_city_cluster);
 }
 
 void QuestsMan(FILE* results, FILE* quests, int* cluster_head, int cluster_counter, int cities, int* clusters, City *Cities){
@@ -235,7 +261,10 @@ void QuestsMan(FILE* results, FILE* quests, int* cluster_head, int cluster_count
             case 3:
                 Task3(quests, Cities, cities, clusters, results);
                 break;
-            //task4 coming soon... fds despachate la
+            //task4 coming soon... fds despachate la (começando as 1 da manha)
+            case 4:
+                Task4(quests, Cities, cities, clusters, results);
+                break;
         }
          while((h = fgetc(quests)) != '\n' && h != EOF);
     }

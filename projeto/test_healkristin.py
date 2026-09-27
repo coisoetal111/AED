@@ -59,6 +59,7 @@ import argparse
 import difflib
 import os
 import random
+import re
 import shlex
 import shutil
 import string
@@ -534,31 +535,75 @@ def locate_first_diff(expected_stripped, actual_stripped):
     return None, None, None  # identical (shouldn't happen if caller already checked)
 
 
+def _split_blocks(text):
+    """Splits already-stripped .results text into per-task blocks, on the
+    blank-line separators the statement mandates between tasks (tolerant
+    of trailing whitespace on the blank line itself)."""
+    if not text:
+        return []
+    return re.split(r"\n[ \t]*\n", text)
+
+
+def _task_number(quest_line):
+    return int(quest_line.split()[0][4:])  # "Task12 x" -> 12
+
+
 def check_case(actual_text, quest_lines, clusters, positions, cities):
     """Returns (verdict, diff_text_or_None, location_or_None).
-    Compares only the Task1/Task2/Task3 content: we pull those blocks out
-    of the actual output (in the order they appear) and diff them against
-    the reference, so the check still works even if the file also contains
-    stray/misplaced blocks - the harness will surface that misalignment as
-    a mismatch. location is (line_number, expected_line, actual_line)."""
+    Only Task1/Task2/Task3 (CHECKABLE_TASKS) are graded. A program that
+    also implements Task4/5/6 legitimately emits extra blocks for those,
+    so - unlike a naive whole-file compare - we split the actual output
+    into one block per line of the .quests file (blank-line separated, as
+    required by section 4) and keep only the blocks whose corresponding
+    .quests line is a checkable task, before comparing against the
+    reference. If the block count doesn't match the number of .quests
+    lines, we can't safely align them - that's reported as its own
+    mismatch rather than risking a bogus line-by-line diff. location is
+    (line_number, expected_line, actual_line)."""
     expected = build_expected(quest_lines, clusters, positions, cities)
-
-    actual_stripped = actual_text.strip("\n")
     expected_stripped = expected.strip("\n")
 
-    if actual_stripped == expected_stripped:
+    actual_stripped = actual_text.strip("\n")
+    actual_blocks = _split_blocks(actual_stripped)
+
+    if len(actual_blocks) != len(quest_lines):
+        diff = "\n".join(
+            difflib.unified_diff(
+                expected_stripped.splitlines(),
+                actual_stripped.splitlines(),
+                fromfile="expected (checkable tasks only)",
+                tofile="actual (full .results, RAW - block count mismatch)",
+                lineterm="",
+            )
+        )
+        note = (
+            f"NOTE: expected {len(quest_lines)} blank-line-separated blocks "
+            f"(one per .quests line) but the .results file has "
+            f"{len(actual_blocks)}. Showing the raw file below instead of "
+            "a filtered comparison, since blocks can't be safely matched "
+            "up to .quests lines when the counts differ."
+        )
+        return "MISMATCH", note + "\n\n" + diff, None
+
+    actual_checkable_blocks = [
+        block for block, line in zip(actual_blocks, quest_lines)
+        if _task_number(line) in CHECKABLE_TASKS
+    ]
+    actual_filtered = "\n\n".join(actual_checkable_blocks)
+
+    if actual_filtered == expected_stripped:
         return "OK", None, None
 
     diff = "\n".join(
         difflib.unified_diff(
             expected_stripped.splitlines(),
-            actual_stripped.splitlines(),
+            actual_filtered.splitlines(),
             fromfile="expected",
-            tofile="actual",
+            tofile="actual (Task4/5/6 blocks excluded - not graded)",
             lineterm="",
         )
     )
-    location = locate_first_diff(expected_stripped, actual_stripped)
+    location = locate_first_diff(expected_stripped, actual_filtered)
     return "MISMATCH", diff, location
 
 
