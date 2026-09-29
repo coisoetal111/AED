@@ -47,6 +47,10 @@ Usage:
                                            sizes and writes an Excel workbook
                                            of tables/charts (opened for you
                                            when it's done) - see EXEL_* below
+    python3 test_healkristin.py -r        re-run the most recently failed
+                                           case under ./runs with its exact
+                                           original files AND settings (e.g.
+                                           valgrind on/off), no flags needed
     python3 test_healkristin.py -h        list the flags and what they do,
                                            without compiling or running anything
     (then answer the "which tasks" prompt, e.g. "1 2 4", or just press
@@ -66,6 +70,7 @@ import string
 import subprocess
 import time
 import sys
+from datetime import datetime
 from pathlib import Path
 
 # ============================== CONFIG ==================================
@@ -150,6 +155,10 @@ EXEL_TIMEOUT_SEC = 60         # per-execution timeout during the sweep
 EXEL_DEFAULT_REPEATS = 5      # used when the user just presses Enter
 EXEL_MAX_OBJECTS_PER_SHEET = 10  # a table + its chart = 2 objects per run,
                                   # so at most 5 runs' worth per sheet/"Page"
+EXEL_OUTPUT_DIR = "exel_reports"  # sibling of BUILD_DIR/WORK_DIR - every
+                                    # -e session gets its own timestamped
+                                    # workbook here, so nothing is overwritten
+EXEL_TIMESTAMP_FORMAT = "%S.%M.%H.%d-%m-%Y"  # second.minute.hour.date
 
 # ==========================================================================
 
@@ -192,9 +201,24 @@ def parse_args():
             "done. Ignores -v (valgrind would swamp the timing)."
         ),
     )
+    parser.add_argument(
+        "-r", "--rerun",
+        action="store_true",
+        help=(
+            "instead of generating new random cases, re-run the most "
+            "recently failed case saved under ./runs (from normal mode or "
+            "--hell), using its exact same files AND the exact same "
+            "settings it failed with (e.g. valgrind on/off) - no need to "
+            "pass -v again if that's how it failed. Reads the case's "
+            ".parameters file. Mutually exclusive with --hell/--exel."
+        ),
+    )
     # -h/--help is added automatically by argparse: it prints the flags
     # above and exits immediately, before anything is compiled or run.
-    return parser.parse_args()
+    args = parser.parse_args()
+    if sum([args.hell, args.exel, args.rerun]) > 1:
+        parser.error("--hell, -e/--exel and -r/--rerun are mutually exclusive.")
+    return args
 
 
 # ------------------------------ Task selection -----------------------------
@@ -434,25 +458,11 @@ def run_case(binary_path: Path, case_dir: Path, quests_base, map_base, position_
     # section 4 of the statement - this is exactly what we're checking.
     results_f = case_dir / f"{quests_base}.results"
 
-    prog_argv = [str(binary_path.resolve()), quests_f, map_f, position_f]
-
-    log_path = None
-    if use_valgrind:
-        log_path = case_dir / "valgrind.log"
-        argv = [
-            "valgrind",
-            "--quiet",
-            f"--error-exitcode={VALGRIND_ERROR_EXITCODE}",
-            "--leak-check=full",
-            "--track-origins=yes",
-            f"--log-file={log_path}",
-        ] + prog_argv
-        timeout = VALGRIND_TIMEOUT_SEC
-    else:
-        argv = prog_argv
-        timeout = TIMEOUT_SEC
-    if timeout_override is not None:
-        timeout = timeout_override
+    log_path = case_dir / "valgrind.log" if use_valgrind else None
+    argv = build_argv(binary_path, quests_f, map_f, position_f, use_valgrind, log_path)
+    timeout = timeout_override
+    if timeout is None:
+        timeout = VALGRIND_TIMEOUT_SEC if use_valgrind else TIMEOUT_SEC
 
     shell_cmd = " ".join(shlex.quote(a) for a in argv)
     print(f"  $ cd {shlex.quote(str(case_dir))} && {shell_cmd}")
@@ -617,6 +627,10 @@ def run_and_report_case(binary_path, case_dir, quests_path, map_path, position_p
     prints the diagnostic block (diff/location/valgrind log/repro command).
     Returns one of the tally keys: OK / MISMATCH / CRASH / VALGRIND_ERROR /
     TIMEOUT / NO_RESULTS_FILE."""
+    effective_timeout = timeout_override
+    if effective_timeout is None:
+        effective_timeout = VALGRIND_TIMEOUT_SEC if use_valgrind else TIMEOUT_SEC
+
     status, actual_text, stdout, stderr, log_path, elapsed = run_case(
         binary_path, case_dir, quests_base, map_base, position_base,
         use_valgrind, timeout_override=timeout_override,
@@ -629,7 +643,8 @@ def run_and_report_case(binary_path, case_dir, quests_path, map_path, position_p
             print(f"  stderr: {stderr.strip()[:300]}")
         print_valgrind_log(log_path)
         print_failure_location(
-            case_dir, quests_path, map_path, position_path, None, binary_path
+            case_dir, quests_path, map_path, position_path, None, binary_path,
+            use_valgrind, effective_timeout,
         )
         return kind
 
@@ -637,7 +652,8 @@ def run_and_report_case(binary_path, case_dir, quests_path, map_path, position_p
         print(f"  -> VALGRIND_ERROR (memcheck found invalid reads/writes and/or leaks)  (time: {elapsed:.4f}s)")
         print_valgrind_log(log_path)
         print_failure_location(
-            case_dir, quests_path, map_path, position_path, None, binary_path
+            case_dir, quests_path, map_path, position_path, None, binary_path,
+            use_valgrind, effective_timeout,
         )
         return "VALGRIND_ERROR"
 
@@ -645,7 +661,8 @@ def run_and_report_case(binary_path, case_dir, quests_path, map_path, position_p
         print(f"  -> NO RESULTS FILE produced  (time: {elapsed:.4f}s)")
         print_valgrind_log(log_path)
         print_failure_location(
-            case_dir, quests_path, map_path, position_path, None, binary_path
+            case_dir, quests_path, map_path, position_path, None, binary_path,
+            use_valgrind, effective_timeout,
         )
         return "NO_RESULTS_FILE"
 
@@ -666,7 +683,8 @@ def run_and_report_case(binary_path, case_dir, quests_path, map_path, position_p
             print(f"    actual:   {act_line!r}")
         print_valgrind_log(log_path)
         print_failure_location(
-            case_dir, quests_path, map_path, position_path, results_path, binary_path
+            case_dir, quests_path, map_path, position_path, results_path, binary_path,
+            use_valgrind, effective_timeout,
         )
     return verdict
 
@@ -731,6 +749,114 @@ def run_hell_mode(binary_path, work_dir, selected_tasks, use_valgrind):
     else:
         print(f"Files kept at: {case_dir}")
     print("=====================================================")
+
+
+# ------------------------------ -r/--rerun mode -----------------------------
+
+def parse_map_file(path):
+    """Reads a .map file back into (cities, edges), the same structures
+    correct_clusters() expects - parsed the same loose way the C program
+    itself reads it (fscanf-style: whitespace-separated ints, layout not
+    line-sensitive)."""
+    nums = [int(t) for t in path.read_text().split()]
+    cities, links = nums[0], nums[1]
+    edges = []
+    idx = 2
+    for _ in range(links):
+        edges.append((nums[idx], nums[idx + 1]))
+        idx += 2
+    return cities, edges
+
+
+def parse_position_file(path):
+    """Reads a .position file back into the {city: (x, y)} dict the Task3
+    reference needs."""
+    nums = [int(t) for t in path.read_text().split()]
+    positions = {}
+    idx = 2  # skip Xmax Ymax
+    while idx + 2 <= len(nums):
+        _id, x, y = nums[idx], nums[idx + 1], nums[idx + 2]
+        positions[_id] = (x, y)
+        idx += 3
+    return positions
+
+
+def parse_quests_file(path):
+    return [line.strip() for line in path.read_text().splitlines() if line.strip()]
+
+
+def parse_parameters_file(path):
+    params = {}
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        params[key] = value
+    return {
+        "quests_base": params.get("quests_base"),
+        "map_base": params.get("map_base"),
+        "position_base": params.get("position_base"),
+        "use_valgrind": params.get("use_valgrind") == "True",
+        "timeout": float(params["timeout"]) if "timeout" in params else None,
+    }
+
+
+def run_rerun_mode(binary_path, work_dir):
+    if not work_dir.exists():
+        print(f"No {work_dir} folder found - nothing to rerun. Run the "
+              "harness normally first to produce a failing case.")
+        sys.exit(1)
+
+    param_files = sorted(
+        work_dir.glob("*/.parameters"), key=lambda p: p.stat().st_mtime, reverse=True
+    )
+    if not param_files:
+        print(f"No saved failing case (.parameters file) found under {work_dir} "
+              "to rerun. Run the harness normally (or with --hell) first.")
+        sys.exit(1)
+
+    param_path = param_files[0]
+    case_dir = param_path.parent
+    params = parse_parameters_file(param_path)
+    print(f"Re-running the failing case at: {case_dir}")
+    print(f"  quests_base={params['quests_base']} map_base={params['map_base']} "
+          f"position_base={params['position_base']} use_valgrind={params['use_valgrind']} "
+          f"timeout={params['timeout']}\n")
+
+    quests_path = case_dir / f"{params['quests_base']}.quests"
+    map_path = case_dir / f"{params['map_base']}.map"
+    position_path = case_dir / f"{params['position_base']}.position"
+    for p in (quests_path, map_path, position_path):
+        if not p.exists():
+            print(f"Missing expected file: {p} - can't rerun this case.")
+            sys.exit(1)
+
+    cities, edges = parse_map_file(map_path)
+    positions = parse_position_file(position_path)
+    quest_lines = parse_quests_file(quests_path)
+
+    use_valgrind = params["use_valgrind"]
+    if use_valgrind and shutil.which("valgrind") is None:
+        print("Note: this case was recorded as using valgrind, but valgrind "
+              "isn't installed here - rerunning without it.\n")
+        use_valgrind = False
+
+    verdict = run_and_report_case(
+        binary_path, case_dir, quests_path, map_path, position_path,
+        params["quests_base"], params["map_base"], params["position_base"],
+        cities, edges, quest_lines, positions,
+        use_valgrind, timeout_override=params["timeout"],
+    )
+
+    print("\n===================== RERUN RESULT =====================")
+    print(f"verdict: {verdict}")
+    if verdict == "OK":
+        print("This case now passes - cleaning it up.")
+        shutil.rmtree(case_dir)
+    else:
+        print(f"Still failing. Files remain at: {case_dir}")
+    print("==========================================================")
 
 
 # ------------------------------ -e/--exel mode ------------------------------
@@ -935,23 +1061,24 @@ def run_exel_mode(binary_path, work_dir, selected_tasks, root):
             anchor_col = charts_start_col + j * CHART_COL_SPAN
             sheet.add_chart(chart, f"{get_column_letter(anchor_col)}1")
 
-    xlsx_path = root / "exel_results.xlsx"
+    output_dir = root / EXEL_OUTPUT_DIR
+    output_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime(EXEL_TIMESTAMP_FORMAT)
+    xlsx_path = output_dir / f"{timestamp}.xlsx"
     try:
         wb.save(xlsx_path)
     except PermissionError:
-        # Almost always means the file is still open (e.g. in Excel) and
-        # the OS has it locked - very common if you re-run right after
-        # opening the previous result. Don't lose this run's data: save
-        # under a fresh name instead of crashing.
+        # Extremely unlikely now that every run gets its own timestamped
+        # name, but still handle a locked target gracefully rather than
+        # losing this run's data.
         print(
-            f"\nCouldn't overwrite {xlsx_path.name} - it's likely still open "
-            "in Excel (or another program) and locked. Close it and re-run "
-            "if you want that exact filename; saving this run under a new "
-            "name instead so nothing is lost."
+            f"\nCouldn't write {xlsx_path.name} - it's likely open in Excel "
+            "(or another program) and locked. Saving under a new name "
+            "instead so nothing is lost."
         )
         n = 1
         while True:
-            fallback_path = root / f"exel_results_{n}.xlsx"
+            fallback_path = output_dir / f"{timestamp}_{n}.xlsx"
             try:
                 wb.save(fallback_path)
                 xlsx_path = fallback_path
@@ -979,6 +1106,13 @@ def main():
         sys.exit(1)
 
     binary_path = compile_program(source_path, root / BUILD_DIR)
+
+    if args.rerun:
+        if args.valgrind:
+            print("Note: -v/--valgrind is ignored under -r/--rerun - the case's "
+                  "own recorded settings are used instead.\n")
+        run_rerun_mode(binary_path, root / WORK_DIR)
+        return
 
     selected_tasks = prompt_task_selection()
     print(f"Testing tasks: {selected_tasks}\n")
@@ -1080,7 +1214,49 @@ def main():
     print("=====================================================")
 
 
-def print_failure_location(case_dir, quests_path, map_path, position_path, results_path, binary_path):
+def build_argv(binary_path, quests_f, map_f, position_f, use_valgrind, log_path=None):
+    """Builds the exact argv used to run a case - shared by run_case() and
+    the .parameters writer, so the two can never drift apart."""
+    prog_argv = [str(binary_path.resolve()), quests_f, map_f, position_f]
+    if not use_valgrind:
+        return prog_argv
+    return [
+        "valgrind",
+        "--quiet",
+        f"--error-exitcode={VALGRIND_ERROR_EXITCODE}",
+        "--leak-check=full",
+        "--track-origins=yes",
+    ] + ([f"--log-file={log_path}"] if log_path is not None else []) + prog_argv
+
+
+def write_parameters_file(case_dir, quests_base, map_base, position_base,
+                           use_valgrind, timeout, binary_path):
+    """Saved alongside every failing case so -r/--rerun can replay it later
+    with the exact same settings (e.g. valgrind on/off) without the user
+    needing to remember or re-specify any flags."""
+    argv = build_argv(
+        binary_path, f"{quests_base}.quests", f"{map_base}.map", f"{position_base}.position",
+        use_valgrind,
+    )
+    lines = [
+        "# Saved automatically when this case failed.",
+        "# Re-run this exact case (same files, same settings) with:",
+        "#     python3 test_healkristin.py -r",
+        "",
+        f"quests_base={quests_base}",
+        f"map_base={map_base}",
+        f"position_base={position_base}",
+        f"use_valgrind={use_valgrind}",
+        f"timeout={timeout}",
+        "",
+        "# exact command that was run:",
+        f"cd {case_dir} && {' '.join(shlex.quote(a) for a in argv)}",
+    ]
+    (case_dir / ".parameters").write_text("\n".join(lines) + "\n")
+
+
+def print_failure_location(case_dir, quests_path, map_path, position_path, results_path,
+                            binary_path, use_valgrind=False, timeout=None):
     print(f"\n  Failing case files kept at: {case_dir}")
     print(f"    quests:   {quests_path}")
     print(f"    map:      {map_path}")
@@ -1092,6 +1268,13 @@ def print_failure_location(case_dir, quests_path, map_path, position_path, resul
         f"    cd {case_dir} && {binary_path.resolve()} "
         f"{quests_path.name} {map_path.name} {position_path.name}"
     )
+    quests_base = quests_path.stem
+    map_base = map_path.stem
+    position_base = position_path.stem
+    write_parameters_file(
+        case_dir, quests_base, map_base, position_base, use_valgrind, timeout, binary_path
+    )
+    print(f"  (settings saved to {case_dir / '.parameters'} - replay with: python3 test_healkristin.py -r)")
 
 
 if __name__ == "__main__":

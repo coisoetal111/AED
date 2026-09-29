@@ -14,6 +14,7 @@ typedef struct{
 
 int ClusterMan(int* clusters, int cities, int* cluster_head, int operations);
 void QuestsMan(FILE* results, FILE* quests, int* cluster_head, int cluster_counter, int cities, int* clusters, City *Cities);
+void WCQU(int operations, FILE* map, int* clusters, int cities);
 void Task1(int cluster_counter, FILE* results);
 void Task2(int* cluster_head, int cluster_counter,int cities, int* clusters, FILE* results);
 void Task3(FILE* quests, City *Cities, int cities, int* clusters, FILE* results);
@@ -74,18 +75,11 @@ int main(int argc, char **argv){
     //agrupamento em clusters
     int *clusters = malloc(cities * sizeof(int));
     if (clusters == NULL) exit(EXIT_FAILURE);
-    for(int i = 0; i < cities; i++) clusters[i] = i + 1;
+
  
-    int p,q,r;
     
-    for(int i = 0; i < operations; i++){
-        if(fscanf(map, "%d %d", &p, &q) != 2) exit(EXIT_FAILURE);
-        if(p < 1 || p > cities || q < 1 || q > cities) exit(EXIT_FAILURE);
-        if(clusters[p - 1] == clusters[q - 1]) continue; 
-        r = clusters[q - 1];
-        for(int i = 0; i < cities; i++) if(clusters[i] == r) clusters[i] = clusters[p - 1];
-    }
-    rewind(map);
+    
+    WCQU(operations, map, clusters, cities);
   
     //guardar informações do position
     int X_max, Y_max;
@@ -110,13 +104,8 @@ int main(int argc, char **argv){
 
  
  
-<<<<<<< HEAD
- int cluster_head[cities];
- 
-=======
     int *cluster_head = malloc(cities * sizeof(int));
     if(cluster_head == NULL) exit(EXIT_FAILURE);
->>>>>>> 3aedc6d (Atualizacao do codigo)
 
 
     int cluster_counter = ClusterMan(clusters, cities, cluster_head, operations);
@@ -142,7 +131,6 @@ for (int i = 0; i < cities; i++) cluster_head[i] = 0;
 
     
  
-<<<<<<< HEAD
  int temp_ = 0;
  int found = 0;
  int cluster_counter = 1;
@@ -164,49 +152,17 @@ for (int i = 0; i < cities; i++) cluster_head[i] = 0;
         if(found == 0){
             cluster_head[temp_] = clusters[i];
             temp_ ++;
-=======
-    if(operations > 0){
-    for (int i = 0; i < cities; i++) cluster_head[i] = 0; 
-    int temp_ = 0;
-    int found = 0;
-    int cluster_counter = 1;
-    for(int i = 1; i < cities; i++) if(clusters[i] != clusters[0]){ 
-        if(temp_ == 0){
->>>>>>> 3aedc6d (Atualizacao do codigo)
             cluster_counter++;
-            temp_ ++;
-            cluster_head[0] = clusters[i];
-        }else{
-            for(int j = 0; j < temp_; j++){
-                found = 0;
-                if(cluster_head[j] == clusters[i]){
-                    found = 1;
-                    break;
-                }
-            }
-            if(found == 0){
-                cluster_head[temp_] = clusters[i];
-                temp_ ++;
-                cluster_counter++;
-            }
+            
+            
         }
-        
+
     }
-<<<<<<< HEAD
-    
- 
+}
  return cluster_counter;
-=======
-    return cluster_counter;
-    }else{
-        int cluster_counter = cities;
-        for (int i = 0; i < cities; i++) cluster_head[i] = i + 1;
-        return cluster_counter;
-    }
->>>>>>> 3aedc6d (Atualizacao do codigo)
 }
 
-  
+
 
 
 
@@ -308,4 +264,77 @@ void QuestsMan(FILE* results, FILE* quests, int* cluster_head, int cluster_count
 
     return;
    
+}
+
+
+void WCQU(int operations, FILE* map, int* clusters, int cities){
+
+   int i, j, p, q, t, x;
+   int *sz = (int *) malloc(cities * sizeof(int));
+   if (sz == NULL) exit(EXIT_FAILURE);
+   
+
+   /* initialize; all disconnected */
+   for (i = 0; i < cities; i++) {
+      
+      clusters[i] = i + 1;
+      sz[i] = 1;
+   }
+
+   /* read while there is data */
+   while (fscanf(map, "%d %d", &p, &q) == 2) {
+      
+
+      /* do search first */
+      for (i = p; i != clusters[i - 1]; i = clusters[i - 1]); 
+      for (j = q; j != clusters[j - 1]; j = clusters[j - 1]);
+
+      if (i == j) {
+
+         continue;
+      }
+
+      
+      
+      if (sz[i -1] < sz[j - 1]) {
+         
+         
+         clusters[i - 1] = j;
+         sz[j - 1] += sz[i - 1];
+         t = j;
+      }
+      else {
+        
+         
+         clusters[j - 1] = i;
+         sz[i - 1] += sz[j - 1];
+         t = i;
+      }
+      
+
+      /* retrace the path and compress to the top */
+      for (i = p; i != clusters[i - 1]; i = x) {
+         
+         x = clusters[i - 1];
+         clusters[i - 1] = t;
+      }
+      for (j = q; j != clusters[j - 1]; j = x) {
+         
+         x = clusters[j - 1];
+         clusters[j - 1] = t;
+      }
+
+
+}
+
+
+ for(int k = 1; k <= cities; k++){
+         int root = k;
+         while(root != clusters[root - 1]) root = clusters[root - 1];
+         clusters[k - 1] = root;
+      }
+
+
+ free(sz);
+ return;
 }
