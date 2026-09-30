@@ -1,9 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <ctype.h>
-#include <stdbool.h>
-#include <unistd.h>
 #include <math.h>
 
 typedef struct{
@@ -12,7 +9,7 @@ typedef struct{
     int city_number;
 } City;
 
-int ClusterMan(int* clusters, int cities, int* cluster_head, int operations);
+int ClusterMan(int* clusters, int cities, int* cluster_head);
 void QuestsMan(FILE* results, FILE* quests, int* cluster_head, int cluster_counter, int cities, int* clusters, City *Cities);
 void WCQU(int operations, FILE* map, int* clusters, int cities);
 void Task1(int cluster_counter, FILE* results);
@@ -59,6 +56,7 @@ int main(int argc, char **argv){
                 else if (strcmp(temp_, ".map") == 0) map = fopen(arg[i], "r");
                 else if( strcmp(temp_, ".position") == 0) position = fopen(arg[i], "r");
                 else exit(EXIT_FAILURE);
+                continue;
            
             }
         }
@@ -108,7 +106,7 @@ int main(int argc, char **argv){
     if(cluster_head == NULL) exit(EXIT_FAILURE);
 
 
-    int cluster_counter = ClusterMan(clusters, cities, cluster_head, operations);
+    int cluster_counter = ClusterMan(clusters, cities, cluster_head);
 
     QuestsMan(results,  quests,  cluster_head,  cluster_counter,  cities,  clusters, Cities);
 
@@ -126,7 +124,7 @@ int main(int argc, char **argv){
 
 
 
-int ClusterMan(int* clusters, int cities, int* cluster_head, int operations){
+int ClusterMan(int* clusters, int cities, int* cluster_head){
 for (int i = 0; i < cities; i++) cluster_head[i] = 0;
 
     
@@ -153,8 +151,7 @@ for (int i = 0; i < cities; i++) cluster_head[i] = 0;
             cluster_head[temp_] = clusters[i];
             temp_ ++;
             cluster_counter++;
-            
-            
+                  
         }
 
     }
@@ -274,7 +271,7 @@ void WCQU(int operations, FILE* map, int* clusters, int cities){
    if (sz == NULL) exit(EXIT_FAILURE);
    
 
-   /* initialize; all disconnected */
+   // initialize; all disconnected 
    for (i = 0; i < cities; i++) {
       
       clusters[i] = i + 1;
@@ -282,7 +279,7 @@ void WCQU(int operations, FILE* map, int* clusters, int cities){
    }
 
    /* read while there is data */
-   while (fscanf(map, "%d %d", &p, &q) == 2) {
+   while ((fscanf(map, "%d %d", &p, &q) == 2)) {
       
 
       /* do search first */

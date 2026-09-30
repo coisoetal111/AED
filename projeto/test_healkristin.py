@@ -92,7 +92,7 @@ MAX_LINKS   = 40        # <-- "map size"; set this too
 
 MAX_COORD   = 50       # .position plane is randomised as Xmax,Ymax in [1, MAX_COORD]
 
-NUM_TESTS   = 25        # how many random cases to run this session
+NUM_TESTS   = 250     # how many random cases to run this session
 TIMEOUT_SEC = 5         # kill a run that hangs longer than this (seconds)
 SEED        = None      # int for reproducible runs, or None for fresh randomness
 
