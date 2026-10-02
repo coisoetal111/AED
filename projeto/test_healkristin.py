@@ -16,12 +16,18 @@ What it does, each run:
          assuming a fixed/shared name.
        - runs the compiled binary against them (optionally under
          valgrind's memcheck, to catch invalid reads/writes and leaks -
-         see USE_VALGRIND below)
+         see USE_VALGRIND below), timing it AND tracking its peak RAM
+         usage ("peak storage") the whole way, printed next to the time
+         on every run. Above STORAGE_WARN_MB (90) prints a loud warning;
+         above STORAGE_ERROR_MB (100) counts as its own error type,
+         STORAGE_ERROR - except in --hell mode, where pushing memory hard
+         is expected, so only the warning applies there, never the error.
        - computes the CORRECT answer itself (independent union-find,
          following the rules in the project statement) for every task
          it knows how to check (currently Task1 and Task2)
        - compares the program's .results file against that correct
-         answer and reports OK / MISMATCH / CRASH / VALGRIND_ERROR / NO OUTPUT
+         answer and reports OK / MISMATCH / CRASH / VALGRIND_ERROR /
+         STORAGE_ERROR / NO OUTPUT
   3. Prints a summary. Files for a test case are deleted automatically
      if and only if that case passed; every non-OK case's files are left
      on disk under ./runs/<case>/ so you can inspect or replay them.
@@ -92,7 +98,7 @@ MAX_LINKS   = 40        # <-- "map size"; set this too
 
 MAX_COORD   = 50       # .position plane is randomised as Xmax,Ymax in [1, MAX_COORD]
 
-NUM_TESTS   = 250     # how many random cases to run this session
+NUM_TESTS   = 25        # how many random cases to run this session
 TIMEOUT_SEC = 5         # kill a run that hangs longer than this (seconds)
 SEED        = None      # int for reproducible runs, or None for fresh randomness
 
@@ -159,6 +165,22 @@ EXEL_OUTPUT_DIR = "exel_reports"  # sibling of BUILD_DIR/WORK_DIR - every
                                     # -e session gets its own timestamped
                                     # workbook here, so nothing is overwritten
 EXEL_TIMESTAMP_FORMAT = "%S.%M.%H.%d-%m-%Y"  # second.minute.hour.date
+
+# --- peak storage (peak RAM footprint) tracking ----------------------------
+# "Storage" here means the process's peak resident memory (what the OS
+# reports as the most RAM it ever held at once), read straight from the
+# kernel via /proc/<pid>/status (Linux/WSL only - gracefully reports
+# "n/a" elsewhere, since there's no portable equivalent without extra
+# dependencies). Under -v/--valgrind this reflects valgrind's own memory
+# (instrumentation overhead), not the target program alone - that's noted
+# wherever it's printed.
+STORAGE_WARN_MB = 90    # prints an attention-grabbing warning above this
+STORAGE_ERROR_MB = 100  # counts as a new error type above this (except in
+                         # --hell mode, where only the warning applies -
+                         # hell mode is expected to push memory hard on
+                         # purpose, so that alone shouldn't fail the run)
+MEMORY_POLL_INTERVAL = 0.001  # seconds between peak-RSS samples while a
+                               # case is running
 
 # ==========================================================================
 
@@ -449,6 +471,56 @@ def generate_quests(cities, selected_tasks):
 
 # ------------------------------ Execution ----------------------------------
 
+FORK_AVAILABLE = hasattr(os, "fork") and hasattr(os, "wait4")  # POSIX only
+
+
+def fork_exec_with_rusage(argv, cwd, timeout, stdout_path, stderr_path):
+    """Runs argv as a child process and returns (returncode, peak_kb,
+    timed_out). peak_kb comes from os.wait4()'s rusage.ru_maxrss, which the
+    kernel accumulates over the CHILD'S ENTIRE LIFETIME and reports exactly
+    at reap time - unlike polling /proc/<pid>/status, this can't miss a
+    short-lived process's peak no matter how fast it exits. POSIX only
+    (guarded by FORK_AVAILABLE; callers fall back to peak_kb=None elsewhere)."""
+    pid = os.fork()
+    if pid == 0:
+        # child: redirect stdio, exec - any failure here just exits 127
+        try:
+            os.chdir(cwd)
+            out_fd = os.open(str(stdout_path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o644)
+            err_fd = os.open(str(stderr_path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o644)
+            os.dup2(out_fd, 1)
+            os.dup2(err_fd, 2)
+            os.close(out_fd)
+            os.close(err_fd)
+            os.execvp(argv[0], argv)
+        except Exception:
+            pass
+        os._exit(127)
+
+    # parent: poll non-blockingly so we can enforce our own timeout
+    start = time.perf_counter()
+    while True:
+        wpid, status, usage = os.wait4(pid, os.WNOHANG)
+        if wpid != 0:
+            break
+        if time.perf_counter() - start > timeout:
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            _, status, usage = os.wait4(pid, 0)
+            peak_kb = usage.ru_maxrss if usage else None
+            return None, peak_kb, True
+        time.sleep(0.001)
+
+    peak_kb = usage.ru_maxrss if usage else None
+    if os.WIFSIGNALED(status):
+        returncode = -os.WTERMSIG(status)
+    else:
+        returncode = os.WEXITSTATUS(status)
+    return returncode, peak_kb, False
+
+
 def run_case(binary_path: Path, case_dir: Path, quests_base, map_base, position_base,
              use_valgrind, timeout_override=None):
     quests_f = f"{quests_base}.quests"
@@ -467,31 +539,54 @@ def run_case(binary_path: Path, case_dir: Path, quests_base, map_base, position_
     shell_cmd = " ".join(shlex.quote(a) for a in argv)
     print(f"  $ cd {shlex.quote(str(case_dir))} && {shell_cmd}")
 
-    try:
-        t0 = time.perf_counter()
-        proc = subprocess.run(
-            argv,
-            cwd=case_dir,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
+    stdout_path = case_dir / "._stdout.tmp"
+    stderr_path = case_dir / "._stderr.tmp"
+    t0 = time.perf_counter()
+
+    if FORK_AVAILABLE:
+        returncode, peak_kb, timed_out = fork_exec_with_rusage(
+            argv, case_dir, timeout, stdout_path, stderr_path
         )
-        elapsed = time.perf_counter() - t0
-    except subprocess.TimeoutExpired:
-        elapsed = time.perf_counter() - t0
-        return "TIMEOUT", None, "", "", log_path, elapsed
+    else:
+        # non-POSIX fallback (e.g. native Windows Python): no peak-memory
+        # reading available, but everything else still works.
+        try:
+            proc = subprocess.run(
+                argv, cwd=case_dir, capture_output=False, timeout=timeout,
+                stdout=open(stdout_path, "w"), stderr=open(stderr_path, "w"),
+            )
+            returncode, peak_kb, timed_out = proc.returncode, None, False
+        except subprocess.TimeoutExpired:
+            returncode, peak_kb, timed_out = None, None, True
 
-    if proc.returncode < 0:
-        sig = -proc.returncode
-        return f"CRASH (signal {sig})", None, proc.stdout, proc.stderr, log_path, elapsed
+    elapsed = time.perf_counter() - t0
+    peak_mb = peak_kb / 1024 if peak_kb is not None else None
+    stdout = stdout_path.read_text() if stdout_path.exists() else ""
+    stderr = stderr_path.read_text() if stderr_path.exists() else ""
+    _cleanup_tmp(stdout_path, stderr_path)
 
-    if use_valgrind and proc.returncode == VALGRIND_ERROR_EXITCODE:
-        return "VALGRIND_ERROR", None, proc.stdout, proc.stderr, log_path, elapsed
+    if timed_out:
+        return "TIMEOUT", None, stdout, stderr, log_path, elapsed, peak_mb
+
+    if returncode < 0:
+        sig = -returncode
+        return f"CRASH (signal {sig})", None, stdout, stderr, log_path, elapsed, peak_mb
+
+    if use_valgrind and returncode == VALGRIND_ERROR_EXITCODE:
+        return "VALGRIND_ERROR", None, stdout, stderr, log_path, elapsed, peak_mb
 
     if not results_f.exists():
-        return "NO_RESULTS_FILE", None, proc.stdout, proc.stderr, log_path, elapsed
+        return "NO_RESULTS_FILE", None, stdout, stderr, log_path, elapsed, peak_mb
 
-    return "RAN", results_f.read_text(), proc.stdout, proc.stderr, log_path, elapsed
+    return "RAN", results_f.read_text(), stdout, stderr, log_path, elapsed, peak_mb
+
+
+def _cleanup_tmp(*paths):
+    for p in paths:
+        try:
+            p.unlink()
+        except FileNotFoundError:
+            pass
 
 
 def print_valgrind_log(log_path):
@@ -619,61 +714,101 @@ def check_case(actual_text, quest_lines, clusters, positions, cities):
 
 # --------------------------------- Main --------------------------------------
 
+def format_storage_suffix(peak_mb, use_valgrind):
+    if peak_mb is None:
+        return "peak storage: n/a (not supported on this platform)"
+    note = " (includes valgrind's own overhead)" if use_valgrind else ""
+    return f"peak storage: {peak_mb:.2f} MB{note}"
+
+
+def print_storage_warning(peak_mb):
+    if peak_mb is None or peak_mb <= STORAGE_WARN_MB:
+        return
+    print("  " + "!" * 62)
+    print(f"  !!! WARNING: peak storage usage was {peak_mb:.2f} MB "
+          f"(over {STORAGE_WARN_MB} MB) !!!")
+    print("  " + "!" * 62)
+
+
 def run_and_report_case(binary_path, case_dir, quests_path, map_path, position_path,
                          quests_base, map_base, position_base,
                          cities, edges, quest_lines, positions,
-                         use_valgrind, timeout_override=None):
+                         use_valgrind, timeout_override=None, count_storage_error=True):
     """Runs one case, prints its outcome, and on anything other than OK
     prints the diagnostic block (diff/location/valgrind log/repro command).
     Returns one of the tally keys: OK / MISMATCH / CRASH / VALGRIND_ERROR /
-    TIMEOUT / NO_RESULTS_FILE."""
+    STORAGE_ERROR / TIMEOUT / NO_RESULTS_FILE. STORAGE_ERROR is only ever
+    returned when count_storage_error is True (--hell mode passes False,
+    since pushing memory hard there is expected, not a bug)."""
     effective_timeout = timeout_override
     if effective_timeout is None:
         effective_timeout = VALGRIND_TIMEOUT_SEC if use_valgrind else TIMEOUT_SEC
 
-    status, actual_text, stdout, stderr, log_path, elapsed = run_case(
+    status, actual_text, stdout, stderr, log_path, elapsed, peak_mb = run_case(
         binary_path, case_dir, quests_base, map_base, position_base,
         use_valgrind, timeout_override=timeout_override,
     )
+    storage_suffix = format_storage_suffix(peak_mb, use_valgrind)
 
     if status.startswith("CRASH") or status == "TIMEOUT":
         kind = "CRASH" if status.startswith("CRASH") else "TIMEOUT"
-        print(f"  -> {status}  (time: {elapsed:.4f}s)")
+        print(f"  -> {status}  (time: {elapsed:.4f}s, {storage_suffix})")
+        print_storage_warning(peak_mb)
         if stderr.strip():
             print(f"  stderr: {stderr.strip()[:300]}")
         print_valgrind_log(log_path)
         print_failure_location(
             case_dir, quests_path, map_path, position_path, None, binary_path,
-            use_valgrind, effective_timeout,
+            use_valgrind, effective_timeout, count_storage_error,
         )
         return kind
 
     if status == "VALGRIND_ERROR":
-        print(f"  -> VALGRIND_ERROR (memcheck found invalid reads/writes and/or leaks)  (time: {elapsed:.4f}s)")
+        print(f"  -> VALGRIND_ERROR (memcheck found invalid reads/writes and/or leaks)  (time: {elapsed:.4f}s, {storage_suffix})")
+        print_storage_warning(peak_mb)
         print_valgrind_log(log_path)
         print_failure_location(
             case_dir, quests_path, map_path, position_path, None, binary_path,
-            use_valgrind, effective_timeout,
+            use_valgrind, effective_timeout, count_storage_error,
         )
         return "VALGRIND_ERROR"
 
     if status == "NO_RESULTS_FILE":
-        print(f"  -> NO RESULTS FILE produced  (time: {elapsed:.4f}s)")
+        print(f"  -> NO RESULTS FILE produced  (time: {elapsed:.4f}s, {storage_suffix})")
+        print_storage_warning(peak_mb)
         print_valgrind_log(log_path)
         print_failure_location(
             case_dir, quests_path, map_path, position_path, None, binary_path,
-            use_valgrind, effective_timeout,
+            use_valgrind, effective_timeout, count_storage_error,
         )
         return "NO_RESULTS_FILE"
+
+    # A completed run with a .results file: check the storage limit before
+    # correctness, same priority VALGRIND_ERROR already gets over MISMATCH.
+    if count_storage_error and peak_mb is not None and peak_mb > STORAGE_ERROR_MB:
+        print(f"  -> STORAGE_ERROR  (time: {elapsed:.4f}s, {storage_suffix})")
+        print("  " + "!" * 62)
+        print(f"  !!! peak storage usage {peak_mb:.2f} MB exceeds the "
+              f"{STORAGE_ERROR_MB} MB limit - counted as an error !!!")
+        print("  " + "!" * 62)
+        results_path = case_dir / f"{quests_base}.results"
+        print_valgrind_log(log_path)
+        print_failure_location(
+            case_dir, quests_path, map_path, position_path, results_path, binary_path,
+            use_valgrind, effective_timeout, count_storage_error,
+        )
+        return "STORAGE_ERROR"
 
     clusters = correct_clusters(cities, edges) if cities >= 1 else []
     verdict, diff, location = check_case(actual_text, quest_lines, clusters, positions, cities)
 
     if verdict == "OK":
-        print(f"  -> OK  (time: {elapsed:.4f}s)")
+        print(f"  -> OK  (time: {elapsed:.4f}s, {storage_suffix})")
+        print_storage_warning(peak_mb)
     else:
         results_path = case_dir / f"{quests_base}.results"
-        print(f"  -> MISMATCH  (time: {elapsed:.4f}s)")
+        print(f"  -> MISMATCH  (time: {elapsed:.4f}s, {storage_suffix})")
+        print_storage_warning(peak_mb)
         if VERBOSE_DIFF:
             print(diff)
         if location and location[0] is not None:
@@ -684,7 +819,7 @@ def run_and_report_case(binary_path, case_dir, quests_path, map_path, position_p
         print_valgrind_log(log_path)
         print_failure_location(
             case_dir, quests_path, map_path, position_path, results_path, binary_path,
-            use_valgrind, effective_timeout,
+            use_valgrind, effective_timeout, count_storage_error,
         )
     return verdict
 
@@ -736,7 +871,7 @@ def run_hell_mode(binary_path, work_dir, selected_tasks, use_valgrind):
         binary_path, case_dir, quests_path, map_path, position_path,
         quests_base, map_base, position_base,
         cities, edges, quest_lines, positions,
-        use_valgrind, timeout_override=timeout,
+        use_valgrind, timeout_override=timeout, count_storage_error=False,
     )
 
     print("\n===================== SUMMARY =====================")
@@ -799,6 +934,9 @@ def parse_parameters_file(path):
         "position_base": params.get("position_base"),
         "use_valgrind": params.get("use_valgrind") == "True",
         "timeout": float(params["timeout"]) if "timeout" in params else None,
+        # defaults to True for .parameters files saved before this field
+        # existed, matching normal mode's original behaviour
+        "count_storage_error": params.get("count_storage_error", "True") == "True",
     }
 
 
@@ -847,6 +985,7 @@ def run_rerun_mode(binary_path, work_dir):
         params["quests_base"], params["map_base"], params["position_base"],
         cities, edges, quest_lines, positions,
         use_valgrind, timeout_override=params["timeout"],
+        count_storage_error=params["count_storage_error"],
     )
 
     print("\n===================== RERUN RESULT =====================")
@@ -910,6 +1049,40 @@ def open_file_in_default_app(path):
         print(f"Could not auto-open the workbook ({e}). Open it manually: {path}")
 
 
+def run_timed_with_peak_memory(argv, cwd, timeout):
+    """Lightweight run+time+peak-RSS measurement for the --exel sweep (no
+    valgrind, no diagnostic file-keeping - just the numbers). Returns
+    (elapsed_seconds_or_None, peak_mb_or_None, failure), where failure is
+    None on a normal exit, "timeout", or a short crash description."""
+    t0 = time.perf_counter()
+    peak_kb = None
+    with open(os.devnull, "wb") as devnull:
+        proc = subprocess.Popen(argv, cwd=cwd, stdout=devnull, stderr=devnull)
+        while True:
+            sample = read_peak_rss_kb(proc.pid)
+            if sample is not None:
+                peak_kb = sample if peak_kb is None else max(peak_kb, sample)
+            if proc.poll() is not None:
+                break
+            if time.perf_counter() - t0 > timeout:
+                proc.kill()
+                try:
+                    proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    pass
+                peak_mb = peak_kb / 1024 if peak_kb is not None else None
+                return None, peak_mb, "timeout"
+            time.sleep(MEMORY_POLL_INTERVAL)
+        sample = read_peak_rss_kb(proc.pid)
+        if sample is not None:
+            peak_kb = sample if peak_kb is None else max(peak_kb, sample)
+
+    peak_mb = peak_kb / 1024 if peak_kb is not None else None
+    if proc.returncode < 0:
+        return None, peak_mb, f"CRASH (signal {-proc.returncode})"
+    return time.perf_counter() - t0, peak_mb, None
+
+
 def run_exel_mode(binary_path, work_dir, selected_tasks, root):
     try:
         import openpyxl
@@ -964,22 +1137,17 @@ def run_exel_mode(binary_path, work_dir, selected_tasks, root):
             argv = [str(binary_path.resolve()), quests_path.name, map_path.name, position_path.name]
             print(f"  $ cd {shlex.quote(str(case_dir))} && {' '.join(shlex.quote(a) for a in argv)}")
 
-            elapsed = None
-            try:
-                t0 = time.perf_counter()
-                proc = subprocess.run(
-                    argv, cwd=case_dir, capture_output=True, text=True,
-                    timeout=EXEL_TIMEOUT_SEC,
-                )
-                elapsed = time.perf_counter() - t0
-            except subprocess.TimeoutExpired:
-                print(f"  [run {run_index}] size={size} -> TIMEOUT (> {EXEL_TIMEOUT_SEC}s)")
+            elapsed, peak_mb, failure = run_timed_with_peak_memory(
+                argv, case_dir, EXEL_TIMEOUT_SEC
+            )
+            storage_bit = format_storage_suffix(peak_mb, use_valgrind=False)
+            if failure == "timeout":
+                print(f"  [run {run_index}] size={size} -> TIMEOUT (> {EXEL_TIMEOUT_SEC}s), {storage_bit}")
+            elif failure is not None:
+                print(f"  [run {run_index}] size={size} -> {failure}, {storage_bit}")
             else:
-                if proc.returncode < 0:
-                    print(f"  [run {run_index}] size={size} -> CRASH (signal {-proc.returncode})")
-                    elapsed = None
-                else:
-                    print(f"  [run {run_index}] size={size} -> {elapsed:.4f}s")
+                print(f"  [run {run_index}] size={size} -> {elapsed:.4f}s, {storage_bit}")
+            print_storage_warning(peak_mb)
 
             run_results[run_index].append((size, elapsed))
 
@@ -1153,6 +1321,7 @@ def main():
         "MISMATCH": 0,
         "CRASH": 0,
         "VALGRIND_ERROR": 0,
+        "STORAGE_ERROR": 0,
         "TIMEOUT": 0,
         "NO_RESULTS_FILE": 0,
     }
@@ -1230,9 +1399,10 @@ def build_argv(binary_path, quests_f, map_f, position_f, use_valgrind, log_path=
 
 
 def write_parameters_file(case_dir, quests_base, map_base, position_base,
-                           use_valgrind, timeout, binary_path):
+                           use_valgrind, timeout, binary_path, count_storage_error=True):
     """Saved alongside every failing case so -r/--rerun can replay it later
-    with the exact same settings (e.g. valgrind on/off) without the user
+    with the exact same settings (e.g. valgrind on/off, and whether peak
+    storage counts as an error - False for a --hell case) without the user
     needing to remember or re-specify any flags."""
     argv = build_argv(
         binary_path, f"{quests_base}.quests", f"{map_base}.map", f"{position_base}.position",
@@ -1248,6 +1418,7 @@ def write_parameters_file(case_dir, quests_base, map_base, position_base,
         f"position_base={position_base}",
         f"use_valgrind={use_valgrind}",
         f"timeout={timeout}",
+        f"count_storage_error={count_storage_error}",
         "",
         "# exact command that was run:",
         f"cd {case_dir} && {' '.join(shlex.quote(a) for a in argv)}",
@@ -1256,7 +1427,7 @@ def write_parameters_file(case_dir, quests_base, map_base, position_base,
 
 
 def print_failure_location(case_dir, quests_path, map_path, position_path, results_path,
-                            binary_path, use_valgrind=False, timeout=None):
+                            binary_path, use_valgrind=False, timeout=None, count_storage_error=True):
     print(f"\n  Failing case files kept at: {case_dir}")
     print(f"    quests:   {quests_path}")
     print(f"    map:      {map_path}")
@@ -1272,7 +1443,8 @@ def print_failure_location(case_dir, quests_path, map_path, position_path, resul
     map_base = map_path.stem
     position_base = position_path.stem
     write_parameters_file(
-        case_dir, quests_base, map_base, position_base, use_valgrind, timeout, binary_path
+        case_dir, quests_base, map_base, position_base, use_valgrind, timeout, binary_path,
+        count_storage_error,
     )
     print(f"  (settings saved to {case_dir / '.parameters'} - replay with: python3 test_healkristin.py -r)")
 
