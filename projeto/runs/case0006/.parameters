@@ -1,0 +1,13 @@
+# Saved automatically when this case failed.
+# Re-run this exact case (same files, same settings) with:
+#     python3 test_healkristin.py -r
+
+quests_base=rnpr
+map_base=qfv6CyO
+position_base=car
+use_valgrind=False
+timeout=5
+count_storage_error=True
+
+# exact command that was run:
+cd /mnt/c/Users/jogos/Desktop/AED/projeto/runs/case0006 && /mnt/c/Users/jogos/Desktop/AED/projeto/build/healkristin rnpr.quests qfv6CyO.map car.position

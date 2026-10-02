@@ -1,5 +1,6 @@
 # Ignorar executaveis do Linux e Windows
 healkristin
+failure_1.c
 *.exe
 *.out
 *.o
