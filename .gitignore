@@ -9,9 +9,11 @@ healkristin
 *.results
 *.txt
 *.xlsx
+*.pdf
 
 # Ignorar pastas de sistema
 .vscode/
 projeto/build/
 projeto/.vscode/
 projeto/BabyOnes/
+projeto/build_compare/
