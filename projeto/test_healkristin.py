@@ -5,7 +5,11 @@ test_healkristin.py
 Randomised test harness for the "HealkrISTin" project (AED, IST Lisboa).
 
 What it does, each run:
-  1. Compiles healkristin.c (once).
+  1. Builds the project with `make` (once) - not a hardcoded gcc command,
+     so it picks up the real makefile's sources (healkristin.c, tasks.c,
+     funcMan.c), flags, and target name exactly as the project defines
+     them. See PROJECT_DIR / MAKEFILE_NAMES / MAKE_TARGET / BINARY_NAME
+     below if your layout differs from the default.
   2. For NUM_TESTS iterations:
        - randomly generates a valid .quests / .map / .position trio, each
          with a RANDOM base filename (sometimes all three share one base,
@@ -42,12 +46,14 @@ crashes - their output isn't graded until you extend `build_expected`.
 Usage:
     python3 test_healkristin.py           run without valgrind (default)
     python3 test_healkristin.py -v        also run every case under valgrind
-    python3 test_healkristin.py --hell    one single, gigantic stress case
-                                           (tens of thousands of cities,
-                                           hundreds of thousands of links,
-                                           filenames right at the Windows
-                                           255-character filename limit)
-                                           instead of NUM_TESTS normal ones
+    python3 test_healkristin.py --hell    up to HELL_REPEATS (default 10)
+                                           gigantic stress cases (tens of
+                                           thousands of cities, hundreds of
+                                           thousands of links, filenames
+                                           right at the Windows 255-char
+                                           filename limit), stopping at the
+                                           first non-OK one - instead of
+                                           NUM_TESTS normal ones
     python3 test_healkristin.py -e        performance sweep: times the binary
                                            across a fixed, growing sequence of
                                            sizes and writes an Excel workbook
@@ -72,6 +78,7 @@ import random
 import re
 import shlex
 import shutil
+import signal
 import string
 import subprocess
 import time
@@ -81,8 +88,14 @@ from pathlib import Path
 
 # ============================== CONFIG ==================================
 
-SOURCE_FILE = "healkristin.c"     # path to the C source to compile
-BUILD_DIR   = "build"             # where the compiled binary goes
+MAKEFILE_NAMES = ["makefile", "Makefile"]  # tried in this order in PROJECT_DIR
+PROJECT_DIR = "."       # directory containing the makefile and all .c/.h
+                         # files - defaults to wherever this script itself
+                         # sits, which is normally right
+MAKE_TARGET = None      # which make target to build; None = make's default
+                         # target (first one in the makefile, usually "all")
+BINARY_NAME = "healkristin"  # must match the makefile's $(TARGET)/binary
+                              # name, since that's what gets run afterwards
 WORK_DIR    = "runs"              # scratch dir, one subfolder per test
 
 MIN_NAME_LEN = 3        # random .quests/.map/.position base filenames are
@@ -121,7 +134,11 @@ MAX_TASK_REPEATS = 3   # ...up to this many times in one .quests file, each
                         # this is legal per the statement and worth fuzzing,
                         # especially for the argument-taking tasks (3/4/6).
 
-# --- --hell mode: one single, absolutely huge case ------------------------
+# --- --hell mode: absolutely huge cases ------------------------------------
+HELL_REPEATS = 10           # how many fresh huge cases to run (each its own
+                             # random size/content); stops at the first
+                             # non-OK result, same as normal mode - edit
+                             # this to run more or fewer
 HELL_MIN_CITIES = 20_000    # "tens of thousands of cities"
 HELL_MAX_CITIES = 50_000
 HELL_MIN_LINKS  = 100_000   # "hundreds of thousands of links"
@@ -161,9 +178,9 @@ EXEL_TIMEOUT_SEC = 60         # per-execution timeout during the sweep
 EXEL_DEFAULT_REPEATS = 5      # used when the user just presses Enter
 EXEL_MAX_OBJECTS_PER_SHEET = 10  # a table + its chart = 2 objects per run,
                                   # so at most 5 runs' worth per sheet/"Page"
-EXEL_OUTPUT_DIR = "exel_reports"  # sibling of BUILD_DIR/WORK_DIR - every
-                                    # -e session gets its own timestamped
-                                    # workbook here, so nothing is overwritten
+EXEL_OUTPUT_DIR = "exel_reports"  # sibling of WORK_DIR - every -e session
+                                    # gets its own timestamped workbook
+                                    # here, so nothing is overwritten
 EXEL_TIMESTAMP_FORMAT = "%S.%M.%H.%d-%m-%Y"  # second.minute.hour.date
 
 # --- peak storage (peak RAM footprint) tracking ----------------------------
@@ -178,9 +195,16 @@ STORAGE_WARN_MB = 90    # prints an attention-grabbing warning above this
 STORAGE_ERROR_MB = 100  # counts as a new error type above this (except in
                          # --hell mode, where only the warning applies -
                          # hell mode is expected to push memory hard on
-                         # purpose, so that alone shouldn't fail the run)
-MEMORY_POLL_INTERVAL = 0.001  # seconds between peak-RSS samples while a
-                               # case is running
+                         # purpose, so that alone shouldn't fail the run).
+                         # BOTH the warning and the error are skipped
+                         # entirely under -v/--valgrind, since valgrind's
+                         # own overhead makes the number meaningless as a
+                         # measure of the target program.
+TIMEOUT_POLL_INTERVAL = 0.001  # how often we check whether a case has
+                                # finished yet, to enforce our own timeout
+                                # (the actual peak-RSS reading itself is a
+                                # single exact value from the kernel at
+                                # reap time, via os.wait4 - no sampling)
 
 # ==========================================================================
 
@@ -205,11 +229,13 @@ def parse_args():
         "--hell",
         action="store_true",
         help=(
-            "stress-test absolute limits instead of the normal suite: one "
-            "single case with tens of thousands of cities, hundreds of "
-            "thousands of links, a huge .position file, and filenames sized "
-            "right up to the Windows/NTFS 255-character filename limit. "
-            "Can be combined with -v, but that will be very slow."
+            "stress-test absolute limits instead of the normal suite: "
+            "up to HELL_REPEATS (default 10) cases, each with tens of "
+            "thousands of cities, hundreds of thousands of links, a huge "
+            ".position file, and filenames sized right up to the "
+            "Windows/NTFS 255-character filename limit - stopping at the "
+            "first non-OK case, same as normal mode. Can be combined with "
+            "-v, but that will be very slow."
         ),
     )
     parser.add_argument(
@@ -284,10 +310,29 @@ def prompt_task_selection():
 
 # ---------------------------- Compilation --------------------------------
 
-def compile_program(source_path: Path, build_dir: Path) -> Path:
-    build_dir.mkdir(parents=True, exist_ok=True)
-    binary_path = build_dir / "healkristin"
-    cmd = ["gcc", "-Wall", "-O2", "-o", str(binary_path), str(source_path), "-lm"]
+def find_makefile(project_dir: Path):
+    for name in MAKEFILE_NAMES:
+        candidate = project_dir / name
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def compile_program(project_dir: Path) -> Path:
+    """Builds the project with `make` - no manual gcc invocation. This
+    matters because the real build isn't just healkristin.c: the
+    makefile's SRCS also pulls in tasks.c and funcMan.c, and uses the
+    project's own CFLAGS/LDFLAGS, none of which a hardcoded single-file
+    gcc command would have respected."""
+    makefile = find_makefile(project_dir)
+    if makefile is None:
+        tried = " or ".join(MAKEFILE_NAMES)
+        print(f"Can't find a makefile ({tried}) in {project_dir}.")
+        sys.exit(1)
+
+    cmd = ["make", "-C", str(project_dir)]
+    if MAKE_TARGET:
+        cmd.append(MAKE_TARGET)
     print(f"  $ {' '.join(shlex.quote(a) for a in cmd)}")
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.stdout:
@@ -295,7 +340,16 @@ def compile_program(source_path: Path, build_dir: Path) -> Path:
     if proc.stderr:
         print(proc.stderr)
     if proc.returncode != 0:
-        print("Compilation failed - fix the C code before testing.")
+        print("make failed - fix the C code (or the makefile) before testing.")
+        sys.exit(1)
+
+    binary_path = project_dir / BINARY_NAME
+    if not binary_path.exists():
+        print(
+            f"make succeeded but {BINARY_NAME} wasn't produced in {project_dir}. "
+            "Check that BINARY_NAME matches the makefile's $(TARGET), and that "
+            "MAKE_TARGET (if set) actually builds it."
+        )
         sys.exit(1)
     return binary_path
 
@@ -511,7 +565,7 @@ def fork_exec_with_rusage(argv, cwd, timeout, stdout_path, stderr_path):
             _, status, usage = os.wait4(pid, 0)
             peak_kb = usage.ru_maxrss if usage else None
             return None, peak_kb, True
-        time.sleep(0.001)
+        time.sleep(TIMEOUT_POLL_INTERVAL)
 
     peak_kb = usage.ru_maxrss if usage else None
     if os.WIFSIGNALED(status):
@@ -721,7 +775,12 @@ def format_storage_suffix(peak_mb, use_valgrind):
     return f"peak storage: {peak_mb:.2f} MB{note}"
 
 
-def print_storage_warning(peak_mb):
+def print_storage_warning(peak_mb, use_valgrind=False):
+    # Blocked entirely under valgrind: its own instrumentation overhead
+    # inflates peak RSS by itself, so the number no longer reflects the
+    # target program and a threshold check on it would be meaningless.
+    if use_valgrind:
+        return
     if peak_mb is None or peak_mb <= STORAGE_WARN_MB:
         return
     print("  " + "!" * 62)
@@ -753,7 +812,7 @@ def run_and_report_case(binary_path, case_dir, quests_path, map_path, position_p
     if status.startswith("CRASH") or status == "TIMEOUT":
         kind = "CRASH" if status.startswith("CRASH") else "TIMEOUT"
         print(f"  -> {status}  (time: {elapsed:.4f}s, {storage_suffix})")
-        print_storage_warning(peak_mb)
+        print_storage_warning(peak_mb, use_valgrind)
         if stderr.strip():
             print(f"  stderr: {stderr.strip()[:300]}")
         print_valgrind_log(log_path)
@@ -765,7 +824,7 @@ def run_and_report_case(binary_path, case_dir, quests_path, map_path, position_p
 
     if status == "VALGRIND_ERROR":
         print(f"  -> VALGRIND_ERROR (memcheck found invalid reads/writes and/or leaks)  (time: {elapsed:.4f}s, {storage_suffix})")
-        print_storage_warning(peak_mb)
+        print_storage_warning(peak_mb, use_valgrind)
         print_valgrind_log(log_path)
         print_failure_location(
             case_dir, quests_path, map_path, position_path, None, binary_path,
@@ -775,7 +834,7 @@ def run_and_report_case(binary_path, case_dir, quests_path, map_path, position_p
 
     if status == "NO_RESULTS_FILE":
         print(f"  -> NO RESULTS FILE produced  (time: {elapsed:.4f}s, {storage_suffix})")
-        print_storage_warning(peak_mb)
+        print_storage_warning(peak_mb, use_valgrind)
         print_valgrind_log(log_path)
         print_failure_location(
             case_dir, quests_path, map_path, position_path, None, binary_path,
@@ -785,7 +844,7 @@ def run_and_report_case(binary_path, case_dir, quests_path, map_path, position_p
 
     # A completed run with a .results file: check the storage limit before
     # correctness, same priority VALGRIND_ERROR already gets over MISMATCH.
-    if count_storage_error and peak_mb is not None and peak_mb > STORAGE_ERROR_MB:
+    if count_storage_error and not use_valgrind and peak_mb is not None and peak_mb > STORAGE_ERROR_MB:
         print(f"  -> STORAGE_ERROR  (time: {elapsed:.4f}s, {storage_suffix})")
         print("  " + "!" * 62)
         print(f"  !!! peak storage usage {peak_mb:.2f} MB exceeds the "
@@ -804,11 +863,11 @@ def run_and_report_case(binary_path, case_dir, quests_path, map_path, position_p
 
     if verdict == "OK":
         print(f"  -> OK  (time: {elapsed:.4f}s, {storage_suffix})")
-        print_storage_warning(peak_mb)
+        print_storage_warning(peak_mb, use_valgrind)
     else:
         results_path = case_dir / f"{quests_base}.results"
         print(f"  -> MISMATCH  (time: {elapsed:.4f}s, {storage_suffix})")
-        print_storage_warning(peak_mb)
+        print_storage_warning(peak_mb, use_valgrind)
         if VERBOSE_DIFF:
             print(diff)
         if location and location[0] is not None:
@@ -825,64 +884,74 @@ def run_and_report_case(binary_path, case_dir, quests_path, map_path, position_p
 
 
 def run_hell_mode(binary_path, work_dir, selected_tasks, use_valgrind):
-    cities = random.randint(HELL_MIN_CITIES, HELL_MAX_CITIES)
     timeout = HELL_VALGRIND_TIMEOUT_SEC if use_valgrind else HELL_TIMEOUT_SEC
 
     print("=====================================================")
-    print("HELL MODE: one absolutely huge case")
+    print(f"HELL MODE: up to {HELL_REPEATS} absolutely huge case(s)")
     print(f"  cities target range   : [{HELL_MIN_CITIES}, {HELL_MAX_CITIES}]")
     print(f"  links target range    : [{HELL_MIN_LINKS}, {HELL_MAX_LINKS}]")
     print(f"  coordinate range      : [1, {HELL_MAX_COORD}]")
     print(f"  filenames sized to    : {WINDOWS_MAX_COMPONENT_LEN}-char Windows/NTFS limit")
-    print(f"  timeout               : {timeout}s")
+    print(f"  timeout per case      : {timeout}s")
     print("=====================================================\n")
 
-    case_dir = work_dir / "hell_case"
-    case_dir.mkdir()
+    stopped_early = False
+    repeats_run = 0
 
-    quests_base, map_base, position_base = hell_basenames()
-    quests_path = case_dir / f"{quests_base}.quests"
-    map_path = case_dir / f"{map_base}.map"
-    position_path = case_dir / f"{position_base}.position"
-    for label, base, path in (
-        ("quests", quests_base, quests_path),
-        ("map", map_base, map_path),
-        ("position", position_base, position_path),
-    ):
-        print(f"  {label} filename: {len(path.name)} chars -> {path.name}")
+    for rep in range(1, HELL_REPEATS + 1):
+        repeats_run = rep
+        print(f"----- hell case {rep}/{HELL_REPEATS} -----")
+        cities = random.randint(HELL_MIN_CITIES, HELL_MAX_CITIES)
 
-    print("\nGenerating map...")
-    map_text, edges, links = generate_map(cities, HELL_MIN_LINKS, HELL_MAX_LINKS)
-    print("Generating position...")
-    position_text, positions = generate_position(cities, HELL_MAX_COORD)
-    print("Generating quests...")
-    quests_text, quest_lines = generate_quests(cities, selected_tasks)
+        case_dir = work_dir / f"hell_case_{rep:02d}"
+        case_dir.mkdir()
 
-    map_path.write_text(map_text)
-    position_path.write_text(position_text)
-    quests_path.write_text(quests_text)
-    print(
-        f"Actual sizes: cities={cities} links={links} "
-        f".map={map_path.stat().st_size:,}B "
-        f".position={position_path.stat().st_size:,}B\n"
-    )
+        quests_base, map_base, position_base = hell_basenames()
+        quests_path = case_dir / f"{quests_base}.quests"
+        map_path = case_dir / f"{map_base}.map"
+        position_path = case_dir / f"{position_base}.position"
+        for label, path in (
+            ("quests", quests_path), ("map", map_path), ("position", position_path),
+        ):
+            print(f"  {label} filename: {len(path.name)} chars -> {path.name}")
 
-    verdict = run_and_report_case(
-        binary_path, case_dir, quests_path, map_path, position_path,
-        quests_base, map_base, position_base,
-        cities, edges, quest_lines, positions,
-        use_valgrind, timeout_override=timeout, count_storage_error=False,
-    )
+        print("  Generating map...")
+        map_text, edges, links = generate_map(cities, HELL_MIN_LINKS, HELL_MAX_LINKS)
+        print("  Generating position...")
+        position_text, positions = generate_position(cities, HELL_MAX_COORD)
+        print("  Generating quests...")
+        quests_text, quest_lines = generate_quests(cities, selected_tasks)
 
-    print("\n===================== SUMMARY =====================")
-    print(f"hell case: {verdict}")
-    if verdict == "OK":
-        shutil.rmtree(case_dir)
-        print(f"Passed - {work_dir} has been cleaned up.")
+        map_path.write_text(map_text)
+        position_path.write_text(position_text)
+        quests_path.write_text(quests_text)
+        print(
+            f"  Actual sizes: cities={cities} links={links} "
+            f".map={map_path.stat().st_size:,}B "
+            f".position={position_path.stat().st_size:,}B\n"
+        )
+
+        verdict = run_and_report_case(
+            binary_path, case_dir, quests_path, map_path, position_path,
+            quests_base, map_base, position_base,
+            cities, edges, quest_lines, positions,
+            use_valgrind, timeout_override=timeout, count_storage_error=False,
+        )
+        print(f"  hell case {rep}/{HELL_REPEATS}: {verdict}\n")
+
+        if verdict == "OK":
+            shutil.rmtree(case_dir)
+        else:
+            stopped_early = True
+            break
+
+    print("===================== SUMMARY =====================")
+    if stopped_early:
+        print(f"Stopped at hell case {repeats_run}/{HELL_REPEATS} (see details above).")
+    else:
+        print(f"All {repeats_run}/{HELL_REPEATS} hell case(s) passed.")
         if work_dir.exists() and not any(work_dir.iterdir()):
             work_dir.rmdir()
-    else:
-        print(f"Files kept at: {case_dir}")
     print("=====================================================")
 
 
@@ -1053,33 +1122,28 @@ def run_timed_with_peak_memory(argv, cwd, timeout):
     """Lightweight run+time+peak-RSS measurement for the --exel sweep (no
     valgrind, no diagnostic file-keeping - just the numbers). Returns
     (elapsed_seconds_or_None, peak_mb_or_None, failure), where failure is
-    None on a normal exit, "timeout", or a short crash description."""
+    None on a normal exit, "timeout", or a short crash description. Uses
+    the same exact os.wait4()-based measurement as run_case()."""
     t0 = time.perf_counter()
-    peak_kb = None
-    with open(os.devnull, "wb") as devnull:
-        proc = subprocess.Popen(argv, cwd=cwd, stdout=devnull, stderr=devnull)
-        while True:
-            sample = read_peak_rss_kb(proc.pid)
-            if sample is not None:
-                peak_kb = sample if peak_kb is None else max(peak_kb, sample)
-            if proc.poll() is not None:
-                break
-            if time.perf_counter() - t0 > timeout:
-                proc.kill()
-                try:
-                    proc.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    pass
-                peak_mb = peak_kb / 1024 if peak_kb is not None else None
-                return None, peak_mb, "timeout"
-            time.sleep(MEMORY_POLL_INTERVAL)
-        sample = read_peak_rss_kb(proc.pid)
-        if sample is not None:
-            peak_kb = sample if peak_kb is None else max(peak_kb, sample)
+    devnull = Path(os.devnull)
+
+    if FORK_AVAILABLE:
+        returncode, peak_kb, timed_out = fork_exec_with_rusage(argv, cwd, timeout, devnull, devnull)
+    else:
+        try:
+            proc = subprocess.run(
+                argv, cwd=cwd, timeout=timeout,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+            returncode, peak_kb, timed_out = proc.returncode, None, False
+        except subprocess.TimeoutExpired:
+            returncode, peak_kb, timed_out = None, None, True
 
     peak_mb = peak_kb / 1024 if peak_kb is not None else None
-    if proc.returncode < 0:
-        return None, peak_mb, f"CRASH (signal {-proc.returncode})"
+    if timed_out:
+        return None, peak_mb, "timeout"
+    if returncode < 0:
+        return None, peak_mb, f"CRASH (signal {-returncode})"
     return time.perf_counter() - t0, peak_mb, None
 
 
@@ -1147,7 +1211,7 @@ def run_exel_mode(binary_path, work_dir, selected_tasks, root):
                 print(f"  [run {run_index}] size={size} -> {failure}, {storage_bit}")
             else:
                 print(f"  [run {run_index}] size={size} -> {elapsed:.4f}s, {storage_bit}")
-            print_storage_warning(peak_mb)
+            print_storage_warning(peak_mb, use_valgrind=False)
 
             run_results[run_index].append((size, elapsed))
 
@@ -1268,12 +1332,9 @@ def main():
         random.seed(SEED)
 
     root = Path(".").resolve()
-    source_path = root / SOURCE_FILE
-    if not source_path.exists():
-        print(f"Can't find {SOURCE_FILE} next to this script.")
-        sys.exit(1)
+    project_dir = (root / PROJECT_DIR).resolve()
 
-    binary_path = compile_program(source_path, root / BUILD_DIR)
+    binary_path = compile_program(project_dir)
 
     if args.rerun:
         if args.valgrind:
