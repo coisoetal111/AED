@@ -28,7 +28,7 @@ What it does, each run:
          is expected, so only the warning applies there, never the error.
        - computes the CORRECT answer itself (independent union-find,
          following the rules in the project statement) for every task
-         it knows how to check (currently Task1 and Task2)
+         it knows how to check (currently Task1-4)
        - compares the program's .results file against that correct
          answer and reports OK / MISMATCH / CRASH / VALGRIND_ERROR /
          STORAGE_ERROR / NO OUTPUT
@@ -36,12 +36,13 @@ What it does, each run:
      if and only if that case passed; every non-OK case's files are left
      on disk under ./runs/<case>/ so you can inspect or replay them.
 
-Only Task1 and Task2 are checked for correctness, because those are the
-only ones implemented in healkristin.c right now (see the switch in
-QuestsMan). You'll be asked at startup which tasks (1-6) to include in
-the generated .quests files; any of Task3-6 you pick still get generated
-(with a random city argument where needed) and run, purely to fuzz for
-crashes - their output isn't graded until you extend `build_expected`.
+Only Task1-4 are checked for correctness (CHECKABLE_TASKS below). You'll
+be asked at startup which tasks (1-6) to include in the generated .quests
+files; Task5/6 still get generated (with a random city argument) and run,
+purely to fuzz for crashes - their output isn't graded until you extend
+`build_expected`. Task3/4's tie-break rule (when multiple cities are
+equally close, the correct answer is the one with the lowest city
+number) isn't written in the enunciado but was confirmed separately.
 
 Usage:
     python3 test_healkristin.py           run without valgrind (default)
@@ -111,7 +112,7 @@ MAX_LINKS   = 40        # <-- "map size"; set this too
 
 MAX_COORD   = 50       # .position plane is randomised as Xmax,Ymax in [1, MAX_COORD]
 
-NUM_TESTS   = 25        # how many random cases to run this session
+NUM_TESTS   = 25000       # how many random cases to run this session
 TIMEOUT_SEC = 5         # kill a run that hangs longer than this (seconds)
 SEED        = None      # int for reproducible runs, or None for fresh randomness
 
@@ -125,7 +126,7 @@ VALGRIND_LOG_CHARS = 4000    # truncate a very long valgrind report when printin
 
 ALL_TASKS = [1, 2, 3, 4, 5, 6]           # tasks defined in the statement
 TASK_NEEDS_ARG = {1: False, 2: False, 3: True, 4: True, 5: False, 6: True}
-CHECKABLE_TASKS = {1, 2, 3}              # tasks this harness knows how to grade
+CHECKABLE_TASKS = {1, 2, 3, 4}           # tasks this harness knows how to grade
 
 MIN_TASK_REPEATS = 1   # a selected task line may appear this many times...
 MAX_TASK_REPEATS = 3   # ...up to this many times in one .quests file, each
@@ -135,7 +136,7 @@ MAX_TASK_REPEATS = 3   # ...up to this many times in one .quests file, each
                         # especially for the argument-taking tasks (3/4/6).
 
 # --- --hell mode: absolutely huge cases ------------------------------------
-HELL_REPEATS = 10           # how many fresh huge cases to run (each its own
+HELL_REPEATS = 10000           # how many fresh huge cases to run (each its own
                              # random size/content); stops at the first
                              # non-OK result, same as normal mode - edit
                              # this to run more or fewer
@@ -302,8 +303,8 @@ def prompt_task_selection():
     if uncheckable:
         print(
             f"Note: Task{{{','.join(str(t) for t in uncheckable)}}} "
-            "aren't implemented in healkristin.c yet, so they'll be "
-            "generated and run (to fuzz for crashes) but not graded."
+            "aren't graded by this harness yet, so they'll be generated "
+            "and run (to fuzz for crashes) but their output isn't checked."
         )
     return chosen
 
@@ -416,9 +417,12 @@ def closest_outside_cluster(cities, clusters, positions, ref):
     distance, which preserves ordering without needing floats/rounding)
     that is NOT in the same cluster as `ref`. Returns -2 for the "problema
     mal definido" cases from section 4.1 (bad ref city, or only one
-    cluster in the whole map). Ties are broken by smallest city id, which
-    matches the natural result of scanning cities in increasing order and
-    only replacing the best candidate on a strictly smaller distance."""
+    cluster in the whole map). Ties are broken by smallest city id - not
+    stated in the written enunciado, but confirmed separately - which
+    matches the natural result of scanning candidate cities in increasing
+    order and only replacing the best candidate on a strictly smaller
+    distance (a single source city, so this alone is enough; Task4 below
+    needs more care, see its docstring)."""
     if ref < 1 or ref > cities:
         return -2
     cluster_of = city_to_cluster_map(clusters)
@@ -439,6 +443,45 @@ def closest_outside_cluster(cities, clusters, positions, ref):
 def expected_block_task3(clusters, positions, cities, arg):
     ans = closest_outside_cluster(cities, clusters, positions, arg)
     return f"Task3 {arg} {ans}"
+
+
+def closest_outside_cluster_for_whole_cluster(cities, clusters, positions, ref):
+    """Reference solution for Task4: nearest city NOT in ref's cluster,
+    where "nearest" is measured to the WHOLE cluster (closest to any
+    member), not just to `ref` itself. Same -2 cases as Task3. Ties are
+    broken by smallest EXTERNAL city id - confirmed separately, same rule
+    as Task3 - but unlike Task3 this needs explicit care: Task4 has
+    MULTIPLE source cities (every cluster member), so a naive "first
+    strictly-better candidate wins" scan - iterating cluster members
+    outer, candidates inner, which is what both C implementations given
+    to this harness actually do - does NOT reliably pick the lowest
+    external id on a tie; whichever member happens to be scanned first
+    can lock in a higher-numbered candidate before a lower-numbered one
+    from a different member is even considered. To get the tie-break
+    right regardless of iteration order, this scans candidate EXTERNAL
+    cities in increasing order (so ties naturally resolve to the lowest
+    one, exactly like Task3), computing each candidate's distance to its
+    closest cluster member."""
+    if ref < 1 or ref > cities:
+        return -2
+    cluster_of = city_to_cluster_map(clusters)
+    ref_cluster = cluster_of[ref]
+    members = [c for c in range(1, cities + 1) if cluster_of[c] == ref_cluster]
+    best_city, best_dist2 = None, None
+    for cand in range(1, cities + 1):
+        if cluster_of[cand] == ref_cluster:
+            continue
+        cx, cy = positions[cand]
+        cand_dist2 = min((cx - positions[m][0]) ** 2 + (cy - positions[m][1]) ** 2 for m in members)
+        if best_dist2 is None or cand_dist2 < best_dist2:
+            best_dist2 = cand_dist2
+            best_city = cand
+    return best_city if best_city is not None else -2
+
+
+def expected_block_task4(clusters, positions, cities, arg):
+    ans = closest_outside_cluster_for_whole_cluster(cities, clusters, positions, arg)
+    return f"Task4 {arg} {ans}"
 
 
 # ------------------------------ Generation --------------------------------
@@ -660,7 +703,7 @@ def print_valgrind_log(log_path):
 
 def build_expected(quest_lines, clusters, positions, cities):
     """Builds the reference .results content for the tasks we can verify
-    (Task1, Task2, Task3), in the order they appear in the .quests file,
+    (Task1-4), in the order they appear in the .quests file,
     blocks separated by one blank line, per section 4 of the statement."""
     blocks = []
     for line in quest_lines:
@@ -673,7 +716,10 @@ def build_expected(quest_lines, clusters, positions, cities):
         elif name == "Task3":
             arg = int(parts[1])
             blocks.append(expected_block_task3(clusters, positions, cities, arg))
-        # Task4/5/6: not implemented yet, nothing to check.
+        elif name == "Task4":
+            arg = int(parts[1])
+            blocks.append(expected_block_task4(clusters, positions, cities, arg))
+        # Task5/6: not implemented yet, nothing to check.
     return "\n\n".join(blocks)
 
 
@@ -709,7 +755,7 @@ def _task_number(quest_line):
 
 def check_case(actual_text, quest_lines, clusters, positions, cities):
     """Returns (verdict, diff_text_or_None, location_or_None).
-    Only Task1/Task2/Task3 (CHECKABLE_TASKS) are graded. A program that
+    Only Task1-4 (CHECKABLE_TASKS) are graded. A program that
     also implements Task4/5/6 legitimately emits extra blocks for those,
     so - unlike a naive whole-file compare - we split the actual output
     into one block per line of the .quests file (blank-line separated, as

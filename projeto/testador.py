@@ -64,22 +64,33 @@ def correr_testes():
             print(f"⏭️  [{nome_curto}] Ignorado: Faltam ficheiros base ou a solução do professor.")
             continue
 
-        # Executa o programa C com os 3 ficheiros
-        subprocess.run([EXECUTAVEL, map_file, pos_file, quest_file], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-        if not os.path.exists(results_file):
-            print(f"❌ [{nome_curto}] FALHOU: O ficheiro .results não foi gerado.")
-            continue
-
-        # Compara os resultados
-        sucesso, erro_msg = comparar_ficheiros(results_file, prof_file)
         
-        if sucesso:
-            print(f"✅ [{nome_curto}] PASSOU")
-            testes_passados += 1
-        else:
-            print(f"❌ [{nome_curto}] FALHOU")
-            print(f"   -> {erro_msg}")
+    # Opcional: Limpar compilações antigas primeiro para garantir um teste limpo
+    subprocess.run(["make", "clean"], capture_output=True)
+
+    # Correr o make
+    resultado_make = subprocess.run(["make"], capture_output=True, text=True)
+
+    if resultado_make.returncode != 0:
+        print("❌ Erro na compilação! O Make falhou:")
+        print(resultado_make.stderr)
+        sys.exit(1) # Pára o script de testes se o código não compilar
+
+    print("✅ Compilação concluída com sucesso!\n")
+
+    if not os.path.exists(results_file):
+        print(f"❌ [{nome_curto}] FALHOU: O ficheiro .results não foi gerado.")
+    
+
+    # Compara os resultados
+    sucesso, erro_msg = comparar_ficheiros(results_file, prof_file)
+        
+    if sucesso:
+         print(f"✅ [{nome_curto}] PASSOU")
+         testes_passados += 1
+    else:
+        print(f"❌ [{nome_curto}] FALHOU")
+        print(f"   -> {erro_msg}")
 
     print("\n" + "="*30)
     print(f"📊 RESULTADO FINAL: {testes_passados}/{total_testes} testes passados.")
