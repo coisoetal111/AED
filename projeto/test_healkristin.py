@@ -40,9 +40,8 @@ Only Task1-4 are checked for correctness (CHECKABLE_TASKS below). You'll
 be asked at startup which tasks (1-6) to include in the generated .quests
 files; Task5/6 still get generated (with a random city argument) and run,
 purely to fuzz for crashes - their output isn't graded until you extend
-`build_expected`. Task3/4's tie-break rule (when multiple cities are
-equally close, the correct answer is the one with the lowest city
-number) isn't written in the enunciado but was confirmed separately.
+`build_expected`. Task3/4's tie-break rule isn't written in the enunciado;
+it is selected by TIEBREAK in the CONFIG block ("cluster" or "city").
 
 Usage:
     python3 test_healkristin.py           run without valgrind (default)
@@ -117,6 +116,15 @@ TIMEOUT_SEC = 5         # kill a run that hangs longer than this (seconds)
 SEED        = None      # int for reproducible runs, or None for fresh randomness
 
 VERBOSE_DIFF = True   # print a line-by-line diff on mismatch
+
+# Tie-break rule for Task3/Task4 when several external cities are at exactly
+# the same distance (not defined in the enunciado):
+#   "cluster": smallest CLUSTER id wins; if the tied cities are in the same
+#              cluster, the smallest CITY id breaks that second tie. Cluster
+#              ids follow the Task2 order (clusters sorted by their smallest
+#              city), so your C code's cluster labels must sort the same way.
+#   "city"   : smallest CITY id wins (ignores clusters).
+TIEBREAK = "cluster"
 
 USE_VALGRIND_DEFAULT = False  # overridden by the -v/--valgrind CLI flag
 VALGRIND_TIMEOUT_SEC = 20    # valgrind is much slower than a native run
@@ -412,31 +420,35 @@ def city_to_cluster_map(clusters):
     return mapping
 
 
+def tie_key(dist2, cluster_idx, city):
+    """Sort key for Task3/4 candidates: smaller is better. Distance first;
+    then, per TIEBREAK, cluster id (then city id) or just city id."""
+    if TIEBREAK == "cluster":
+        return (dist2, cluster_idx, city)
+    return (dist2, city)
+
+
 def closest_outside_cluster(cities, clusters, positions, ref):
     """Reference solution for Task3: nearest city (by squared Euclidean
     distance, which preserves ordering without needing floats/rounding)
     that is NOT in the same cluster as `ref`. Returns -2 for the "problema
     mal definido" cases from section 4.1 (bad ref city, or only one
-    cluster in the whole map). Ties are broken by smallest city id - not
-    stated in the written enunciado, but confirmed separately - which
-    matches the natural result of scanning candidate cities in increasing
-    order and only replacing the best candidate on a strictly smaller
-    distance (a single source city, so this alone is enough; Task4 below
-    needs more care, see its docstring)."""
+    cluster in the whole map). Ties are broken per TIEBREAK (see CONFIG);
+    the rule is not stated in the written enunciado."""
     if ref < 1 or ref > cities:
         return -2
     cluster_of = city_to_cluster_map(clusters)
     ref_cluster = cluster_of[ref]
     rx, ry = positions[ref]
-    best_city, best_dist2 = None, None
+    best_key, best_city = None, None
     for c in range(1, cities + 1):
         if cluster_of[c] == ref_cluster:
             continue
         x, y = positions[c]
         d2 = (x - rx) ** 2 + (y - ry) ** 2
-        if best_dist2 is None or d2 < best_dist2:
-            best_dist2 = d2
-            best_city = c
+        key = tie_key(d2, cluster_of[c], c)
+        if best_key is None or key < best_key:
+            best_key, best_city = key, c
     return best_city if best_city is not None else -2
 
 
@@ -449,8 +461,8 @@ def closest_outside_cluster_for_whole_cluster(cities, clusters, positions, ref):
     """Reference solution for Task4: nearest city NOT in ref's cluster,
     where "nearest" is measured to the WHOLE cluster (closest to any
     member), not just to `ref` itself. Same -2 cases as Task3. Ties are
-    broken by smallest EXTERNAL city id - confirmed separately, same rule
-    as Task3 - but unlike Task3 this needs explicit care: Task4 has
+    broken per TIEBREAK (see CONFIG), same rule as Task3 - but unlike
+    Task3 this needs explicit care: Task4 has
     MULTIPLE source cities (every cluster member), so a naive "first
     strictly-better candidate wins" scan - iterating cluster members
     outer, candidates inner, which is what both C implementations given
@@ -467,15 +479,15 @@ def closest_outside_cluster_for_whole_cluster(cities, clusters, positions, ref):
     cluster_of = city_to_cluster_map(clusters)
     ref_cluster = cluster_of[ref]
     members = [c for c in range(1, cities + 1) if cluster_of[c] == ref_cluster]
-    best_city, best_dist2 = None, None
+    best_key, best_city = None, None
     for cand in range(1, cities + 1):
         if cluster_of[cand] == ref_cluster:
             continue
         cx, cy = positions[cand]
         cand_dist2 = min((cx - positions[m][0]) ** 2 + (cy - positions[m][1]) ** 2 for m in members)
-        if best_dist2 is None or cand_dist2 < best_dist2:
-            best_dist2 = cand_dist2
-            best_city = cand
+        key = tie_key(cand_dist2, cluster_of[cand], cand)
+        if best_key is None or key < best_key:
+            best_key, best_city = key, cand
     return best_city if best_city is not None else -2
 
 
