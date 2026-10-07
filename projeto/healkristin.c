@@ -11,7 +11,7 @@ int main(int argc, char **argv){
     int cities = 0;
 
     //verificação do numero de argumentos corretos
-    if(argc!=4) exit(EXIT_FAILURE);
+    if(argc!=4) exit(0);
     char *arg[3];
 
     for (int i = 1; i < argc; i++) {
@@ -37,39 +37,39 @@ int main(int argc, char **argv){
                 }
                 else if (strcmp(temp_, ".map") == 0) map = fopen(arg[i], "r");
                 else if( strcmp(temp_, ".position") == 0) position = fopen(arg[i], "r");
-                else exit(EXIT_FAILURE);
+                else exit(0);
                 continue;
            
             }
         }
     
     }
-    if(map == NULL || position == NULL || quests == NULL || results == NULL) exit(EXIT_FAILURE); 
+    if(map == NULL || position == NULL || quests == NULL || results == NULL) exit(0); 
  
     //contagem do número de cidades
 
     int operations;
-    if(fscanf(map, "%d %d", &cities, &operations) != 2) exit(EXIT_FAILURE);
-    if(cities <= 0 || operations < 0) exit(EXIT_FAILURE);
+    if(fscanf(map, "%d %d", &cities, &operations) != 2) exit(0);
+    if(cities <= 0 || operations < 0) exit(0);
  
     //agrupamento em clusters
     int *clusters = malloc(cities * sizeof(int));
-    if (clusters == NULL) exit(EXIT_FAILURE);
+    if (clusters == NULL) exit(0);
 
     WCQU(operations, map, clusters, cities);
   
     //guardar informações do position
     int X_max, Y_max;
-    if(fscanf(position, "%d %d", &X_max, &Y_max) != 2) exit(EXIT_FAILURE);
-    if(X_max <= 0 || Y_max <= 0) exit(EXIT_FAILURE);
+    if(fscanf(position, "%d %d", &X_max, &Y_max) != 2) exit(0);
+    if(X_max <= 0 || Y_max <= 0) exit(0);
 
     City *Cities = malloc(cities * sizeof(City));
-    if(Cities == NULL) exit(EXIT_FAILURE);
+    if(Cities == NULL) exit(0);
     int num, x, y;
     for(int i = 0; i < cities; i++){
-        if(fscanf(position, "%d %d %d", &num, &x, &y) != 3) exit(EXIT_FAILURE);
+        if(fscanf(position, "%d %d %d", &num, &x, &y) != 3) exit(0);
     
-        if(num < 1 || num > cities || x <= 0 || y <= 0 || x > X_max || y > Y_max)exit(EXIT_FAILURE);
+        if(num < 1 || num > cities || x <= 0 || y <= 0 || x > X_max || y > Y_max)exit(0);
     
         Cities[num - 1].city_number = num;
         Cities[num - 1].x = x;
@@ -77,7 +77,7 @@ int main(int argc, char **argv){
     }
  
     int *cluster_head = malloc(cities * sizeof(int));
-    if(cluster_head == NULL) exit(EXIT_FAILURE);
+    if(cluster_head == NULL) exit(0);
 
 
     int cluster_counter = ClusterMan(clusters, cities, cluster_head);

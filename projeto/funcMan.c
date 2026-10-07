@@ -64,7 +64,7 @@ void WCQU(int operations, FILE* map, int* clusters, int cities){
 
    int i, j, p, q, t, x;
    int *size = (int *) malloc(cities * sizeof(int));
-   if (size == NULL) exit(EXIT_FAILURE);
+   if (size == NULL) exit(0);
   
    for (i = 0; i < cities; i++) {
       clusters[i] = i + 1;

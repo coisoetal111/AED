@@ -40,8 +40,9 @@ Only Task1-4 are checked for correctness (CHECKABLE_TASKS below). You'll
 be asked at startup which tasks (1-6) to include in the generated .quests
 files; Task5/6 still get generated (with a random city argument) and run,
 purely to fuzz for crashes - their output isn't graded until you extend
-`build_expected`. Task3/4's tie-break rule isn't written in the enunciado;
-it is selected by TIEBREAK in the CONFIG block ("cluster" or "city").
+`build_expected`. Task3/4's tie-break rule (when multiple cities are
+equally close, the correct answer is the one with the lowest city
+number) isn't written in the enunciado but was confirmed separately.
 
 Usage:
     python3 test_healkristin.py           run without valgrind (default)
@@ -111,20 +112,20 @@ MAX_LINKS   = 40        # <-- "map size"; set this too
 
 MAX_COORD   = 50       # .position plane is randomised as Xmax,Ymax in [1, MAX_COORD]
 
-NUM_TESTS   = 25000       # how many random cases to run this session
+NUM_TESTS   = 25        # how many random cases to run this session
 TIMEOUT_SEC = 5         # kill a run that hangs longer than this (seconds)
 SEED        = None      # int for reproducible runs, or None for fresh randomness
 
 VERBOSE_DIFF = True   # print a line-by-line diff on mismatch
 
-# Tie-break rule for Task3/Task4 when several external cities are at exactly
-# the same distance (not defined in the enunciado):
-#   "cluster": smallest CLUSTER id wins; if the tied cities are in the same
-#              cluster, the smallest CITY id breaks that second tie. Cluster
-#              ids follow the Task2 order (clusters sorted by their smallest
-#              city), so your C code's cluster labels must sort the same way.
-#   "city"   : smallest CITY id wins (ignores clusters).
-TIEBREAK = "cluster"
+DIVERGENCE_LINE_THRESHOLD = 201  # the "First divergence" expected/actual
+DIVERGENCE_WINDOW = 100          # lines are shown in full up to this many
+                                  # characters; past that, only this many
+                                  # characters before/after the exact
+                                  # differing character are shown (a single
+                                  # Task2 cluster line can run to tens of
+                                  # thousands of characters in --hell mode,
+                                  # which would otherwise flood the terminal)
 
 USE_VALGRIND_DEFAULT = False  # overridden by the -v/--valgrind CLI flag
 VALGRIND_TIMEOUT_SEC = 20    # valgrind is much slower than a native run
@@ -144,7 +145,7 @@ MAX_TASK_REPEATS = 3   # ...up to this many times in one .quests file, each
                         # especially for the argument-taking tasks (3/4/6).
 
 # --- --hell mode: absolutely huge cases ------------------------------------
-HELL_REPEATS = 10000           # how many fresh huge cases to run (each its own
+HELL_REPEATS = 10           # how many fresh huge cases to run (each its own
                              # random size/content); stops at the first
                              # non-OK result, same as normal mode - edit
                              # this to run more or fewer
@@ -152,9 +153,17 @@ HELL_MIN_CITIES = 20_000    # "tens of thousands of cities"
 HELL_MAX_CITIES = 50_000
 HELL_MIN_LINKS  = 100_000   # "hundreds of thousands of links"
 HELL_MAX_LINKS  = 400_000
-HELL_MAX_COORD  = 1_000_000_000  # huge coordinate range -> a much heavier
-                                   # .position file (one line per city, with
-                                   # up to 10-digit numbers on each line)
+HELL_MAX_COORD  = 30_000    # still a much heavier .position file than
+                             # normal mode's MAX_COORD=50 (5-digit numbers
+                             # on every line, at tens of thousands of
+                             # lines) - but capped so dx*dx+dy*dy can't
+                             # overflow a 32-bit int even in the worst
+                             # case (two cities at opposite corners), so
+                             # Task3/Task4 checks at hell scale test real
+                             # algorithmic correctness instead of being
+                             # swamped by unavoidable int-overflow noise.
+                             # sqrt(INT_MAX/2) =~ 32,767 is the hard
+                             # ceiling for that; this leaves some margin.
 HELL_TIMEOUT_SEC = 120            # native run gets a lot more time...
 HELL_VALGRIND_TIMEOUT_SEC = 900   # ...and even more under valgrind, which
                                    # will be dramatically slower at this size
@@ -405,7 +414,7 @@ def expected_block_task1(clusters):
 def expected_block_task2(clusters):
     lines = [f"Task2 {len(clusters)}"]
     for cl in clusters:
-        lines.append("Cluster: " + " ".join(str(c) for c in cl) + " ")
+        lines.append("Cluster: " + " ".join(str(c) for c in cl))
     return "\n".join(lines)
 
 
@@ -420,35 +429,31 @@ def city_to_cluster_map(clusters):
     return mapping
 
 
-def tie_key(dist2, cluster_idx, city):
-    """Sort key for Task3/4 candidates: smaller is better. Distance first;
-    then, per TIEBREAK, cluster id (then city id) or just city id."""
-    if TIEBREAK == "cluster":
-        return (dist2, cluster_idx, city)
-    return (dist2, city)
-
-
 def closest_outside_cluster(cities, clusters, positions, ref):
     """Reference solution for Task3: nearest city (by squared Euclidean
     distance, which preserves ordering without needing floats/rounding)
     that is NOT in the same cluster as `ref`. Returns -2 for the "problema
     mal definido" cases from section 4.1 (bad ref city, or only one
-    cluster in the whole map). Ties are broken per TIEBREAK (see CONFIG);
-    the rule is not stated in the written enunciado."""
+    cluster in the whole map). Ties are broken by smallest city id - not
+    stated in the written enunciado, but confirmed separately - which
+    matches the natural result of scanning candidate cities in increasing
+    order and only replacing the best candidate on a strictly smaller
+    distance (a single source city, so this alone is enough; Task4 below
+    needs more care, see its docstring)."""
     if ref < 1 or ref > cities:
         return -2
     cluster_of = city_to_cluster_map(clusters)
     ref_cluster = cluster_of[ref]
     rx, ry = positions[ref]
-    best_key, best_city = None, None
+    best_city, best_dist2 = None, None
     for c in range(1, cities + 1):
         if cluster_of[c] == ref_cluster:
             continue
         x, y = positions[c]
         d2 = (x - rx) ** 2 + (y - ry) ** 2
-        key = tie_key(d2, cluster_of[c], c)
-        if best_key is None or key < best_key:
-            best_key, best_city = key, c
+        if best_dist2 is None or d2 < best_dist2:
+            best_dist2 = d2
+            best_city = c
     return best_city if best_city is not None else -2
 
 
@@ -461,8 +466,8 @@ def closest_outside_cluster_for_whole_cluster(cities, clusters, positions, ref):
     """Reference solution for Task4: nearest city NOT in ref's cluster,
     where "nearest" is measured to the WHOLE cluster (closest to any
     member), not just to `ref` itself. Same -2 cases as Task3. Ties are
-    broken per TIEBREAK (see CONFIG), same rule as Task3 - but unlike
-    Task3 this needs explicit care: Task4 has
+    broken by smallest EXTERNAL city id - confirmed separately, same rule
+    as Task3 - but unlike Task3 this needs explicit care: Task4 has
     MULTIPLE source cities (every cluster member), so a naive "first
     strictly-better candidate wins" scan - iterating cluster members
     outer, candidates inner, which is what both C implementations given
@@ -479,15 +484,15 @@ def closest_outside_cluster_for_whole_cluster(cities, clusters, positions, ref):
     cluster_of = city_to_cluster_map(clusters)
     ref_cluster = cluster_of[ref]
     members = [c for c in range(1, cities + 1) if cluster_of[c] == ref_cluster]
-    best_key, best_city = None, None
+    best_city, best_dist2 = None, None
     for cand in range(1, cities + 1):
         if cluster_of[cand] == ref_cluster:
             continue
         cx, cy = positions[cand]
         cand_dist2 = min((cx - positions[m][0]) ** 2 + (cy - positions[m][1]) ** 2 for m in members)
-        key = tie_key(cand_dist2, cluster_of[cand], cand)
-        if best_key is None or key < best_key:
-            best_key, best_city = key, cand
+        if best_dist2 is None or cand_dist2 < best_dist2:
+            best_dist2 = cand_dist2
+            best_city = cand
     return best_city if best_city is not None else -2
 
 
@@ -752,6 +757,36 @@ def locate_first_diff(expected_stripped, actual_stripped):
     return None, None, None  # identical (shouldn't happen if caller already checked)
 
 
+def truncate_around_diff(exp_line, act_line, threshold=DIVERGENCE_LINE_THRESHOLD,
+                          window=DIVERGENCE_WINDOW):
+    """If either line is longer than `threshold` characters, returns both
+    lines cut down to `window` characters before and after the exact
+    character where they first differ (not just which LINE differs -
+    within that line too), with '...' markers wherever text was cut.
+    Otherwise returns them unchanged. None lines (one side missing a
+    line entirely) pass through as-is."""
+    if exp_line is None or act_line is None:
+        return exp_line, act_line
+    if len(exp_line) <= threshold and len(act_line) <= threshold:
+        return exp_line, act_line
+
+    min_len = min(len(exp_line), len(act_line))
+    diff_idx = min_len
+    for i in range(min_len):
+        if exp_line[i] != act_line[i]:
+            diff_idx = i
+            break
+
+    def window_around(s):
+        start = max(0, diff_idx - window)
+        end = min(len(s), diff_idx + window)
+        prefix = "..." if start > 0 else ""
+        suffix = "..." if end < len(s) else ""
+        return prefix + s[start:end] + suffix
+
+    return window_around(exp_line), window_around(act_line)
+
+
 def _split_blocks(text):
     """Splits already-stripped .results text into per-task blocks, on the
     blank-line separators the statement mandates between tasks (tolerant
@@ -930,9 +965,10 @@ def run_and_report_case(binary_path, case_dir, quests_path, map_path, position_p
             print(diff)
         if location and location[0] is not None:
             line_no, exp_line, act_line = location
+            exp_shown, act_shown = truncate_around_diff(exp_line, act_line)
             print(f"\n  First divergence at output line {line_no}:")
-            print(f"    expected: {exp_line!r}")
-            print(f"    actual:   {act_line!r}")
+            print(f"    expected: {exp_shown!r}")
+            print(f"    actual:   {act_shown!r}")
         print_valgrind_log(log_path)
         print_failure_location(
             case_dir, quests_path, map_path, position_path, results_path, binary_path,

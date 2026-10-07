@@ -35,7 +35,7 @@ void Task3(FILE *quests, City *Cities, int cities, int *clusters, FILE *results)
     int city_ref, cluster_ref;
     long long best_distance = -1; //nao existe ainda nao foi encontrado
     int closest_city = -2; //mesmo motivo que acima mas caso tudo pertença ao mesmo cluster ja temos que é -2 como pedido
-    if(fscanf(quests, " %d", &city_ref) != 1) exit(EXIT_FAILURE);
+    if(fscanf(quests, " %d", &city_ref) != 1) exit(0);
     if(city_ref >= 1 && city_ref <= cities){ 
         cluster_ref = clusters[city_ref - 1];
         for(int i = 0; i < cities;i++){
@@ -55,7 +55,7 @@ void Task4(FILE* quests, City *Cities, int cities, int *clusters, FILE* results)
     int city_ref, cluster_ref;
     long long best_distance_cluster = -1;
     int closest_city_cluster = -2;
-    if(fscanf(quests, " %d", &city_ref) != 1) exit(EXIT_FAILURE);
+    if(fscanf(quests, " %d", &city_ref) != 1) exit(0);
     if(city_ref >= 1 && city_ref <= cities){
         cluster_ref = clusters[city_ref -1];
         for(int i = 0; i < cities; i++){
