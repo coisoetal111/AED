@@ -26,12 +26,15 @@ What it does, each run:
          above STORAGE_ERROR_MB (100) counts as its own error type,
          STORAGE_ERROR - except in --hell mode, where pushing memory hard
          is expected, so only the warning applies there, never the error.
+       - any run that takes more than TIME_LIMIT_SEC (10 s) counts as
+         its own failure, TIME_LIMIT - in every mode, --hell included
+         (not enforced under -v, where valgrind skews the clock).
        - computes the CORRECT answer itself (independent union-find,
          following the rules in the project statement) for every task
          it knows how to check (currently Task1-4)
        - compares the program's .results file against that correct
          answer and reports OK / MISMATCH / CRASH / VALGRIND_ERROR /
-         STORAGE_ERROR / NO OUTPUT
+         STORAGE_ERROR / TIME_LIMIT / NO OUTPUT
   3. Prints a summary. Files for a test case are deleted automatically
      if and only if that case passed; every non-OK case's files are left
      on disk under ./runs/<case>/ so you can inspect or replay them.
@@ -114,6 +117,11 @@ MAX_COORD   = 50       # .position plane is randomised as Xmax,Ymax in [1, MAX_C
 
 NUM_TESTS   = 25        # how many random cases to run this session
 TIMEOUT_SEC = 5         # kill a run that hangs longer than this (seconds)
+TIME_LIMIT_SEC = 10     # a run that FINISHES but took longer than this counts
+                        # as a failure (TIME_LIMIT) in EVERY mode, --hell
+                        # included. Separate from the kill timeouts. Not
+                        # enforced under -v (valgrind is ~20x slower, so
+                        # wall time there means nothing).
 SEED        = None      # int for reproducible runs, or None for fresh randomness
 
 VERBOSE_DIFF = True   # print a line-by-line diff on mismatch
@@ -145,7 +153,7 @@ MAX_TASK_REPEATS = 3   # ...up to this many times in one .quests file, each
                         # especially for the argument-taking tasks (3/4/6).
 
 # --- --hell mode: absolutely huge cases ------------------------------------
-HELL_REPEATS = 10           # how many fresh huge cases to run (each its own
+HELL_REPEATS = 10000         # how many fresh huge cases to run (each its own
                              # random size/content); stops at the first
                              # non-OK result, same as normal mode - edit
                              # this to run more or fewer
@@ -899,7 +907,9 @@ def run_and_report_case(binary_path, case_dir, quests_path, map_path, position_p
     """Runs one case, prints its outcome, and on anything other than OK
     prints the diagnostic block (diff/location/valgrind log/repro command).
     Returns one of the tally keys: OK / MISMATCH / CRASH / VALGRIND_ERROR /
-    EXEC_ERROR / STORAGE_ERROR / TIMEOUT / NO_RESULTS_FILE. STORAGE_ERROR
+    EXEC_ERROR / STORAGE_ERROR / TIME_LIMIT / TIMEOUT / NO_RESULTS_FILE.
+    TIME_LIMIT (finished, but took > TIME_LIMIT_SEC) applies in every mode,
+    hell included, except under valgrind. STORAGE_ERROR
     is only ever returned when count_storage_error is True (--hell mode
     passes False, since pushing memory hard there is expected, not a
     bug). EXEC_ERROR applies everywhere, always - a non-zero exit code is
@@ -965,6 +975,21 @@ def run_and_report_case(binary_path, case_dir, quests_path, map_path, position_p
             use_valgrind, effective_timeout, count_storage_error,
         )
         return "NO_RESULTS_FILE"
+
+    # A run that finished but was too slow fails in EVERY mode (hell too).
+    if not use_valgrind and elapsed is not None and elapsed > TIME_LIMIT_SEC:
+        print(f"  -> TIME_LIMIT  (time: {elapsed:.4f}s, {storage_suffix})")
+        print("  " + "!" * 62)
+        print(f"  !!! running time {elapsed:.2f}s exceeds the {TIME_LIMIT_SEC}s limit"
+              " - counted as a failure !!!")
+        print("  " + "!" * 62)
+        print_storage_warning(peak_mb, use_valgrind)
+        results_path = case_dir / f"{quests_base}.results"
+        print_failure_location(
+            case_dir, quests_path, map_path, position_path, results_path, binary_path,
+            use_valgrind, effective_timeout, count_storage_error,
+        )
+        return "TIME_LIMIT"
 
     # A completed run with a .results file: check the storage limit before
     # correctness, same priority VALGRIND_ERROR already gets over MISMATCH.
@@ -1509,6 +1534,7 @@ def main():
         "VALGRIND_ERROR": 0,
         "EXEC_ERROR": 0,
         "STORAGE_ERROR": 0,
+        "TIME_LIMIT": 0,
         "TIMEOUT": 0,
         "NO_RESULTS_FILE": 0,
     }
