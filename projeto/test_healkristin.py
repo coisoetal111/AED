@@ -689,6 +689,16 @@ def run_case(binary_path: Path, case_dir: Path, quests_base, map_base, position_
     if use_valgrind and returncode == VALGRIND_ERROR_EXITCODE:
         return "VALGRIND_ERROR", None, stdout, stderr, log_path, elapsed, peak_mb
 
+    # Per an enunciado clarification: ANY termination - success or a
+    # deliberate early exit() for invalid input, in main() or anywhere
+    # else - MUST return 0. A non-zero, non-crash exit is graded by the
+    # submissions site as "Erro de Execução" (zero points for that test),
+    # independent of whatever the program did or didn't produce. This
+    # check is unconditional - even a program that writes a perfectly
+    # correct .results file still fails this if its exit code isn't 0.
+    if returncode != 0:
+        return f"EXEC_ERROR (exit code {returncode})", None, stdout, stderr, log_path, elapsed, peak_mb
+
     if not results_f.exists():
         return "NO_RESULTS_FILE", None, stdout, stderr, log_path, elapsed, peak_mb
 
@@ -889,9 +899,11 @@ def run_and_report_case(binary_path, case_dir, quests_path, map_path, position_p
     """Runs one case, prints its outcome, and on anything other than OK
     prints the diagnostic block (diff/location/valgrind log/repro command).
     Returns one of the tally keys: OK / MISMATCH / CRASH / VALGRIND_ERROR /
-    STORAGE_ERROR / TIMEOUT / NO_RESULTS_FILE. STORAGE_ERROR is only ever
-    returned when count_storage_error is True (--hell mode passes False,
-    since pushing memory hard there is expected, not a bug)."""
+    EXEC_ERROR / STORAGE_ERROR / TIMEOUT / NO_RESULTS_FILE. STORAGE_ERROR
+    is only ever returned when count_storage_error is True (--hell mode
+    passes False, since pushing memory hard there is expected, not a
+    bug). EXEC_ERROR applies everywhere, always - a non-zero exit code is
+    never acceptable regardless of mode or input scale."""
     effective_timeout = timeout_override
     if effective_timeout is None:
         effective_timeout = VALGRIND_TIMEOUT_SEC if use_valgrind else TIMEOUT_SEC
@@ -924,6 +936,25 @@ def run_and_report_case(binary_path, case_dir, quests_path, map_path, position_p
             use_valgrind, effective_timeout, count_storage_error,
         )
         return "VALGRIND_ERROR"
+
+    if status.startswith("EXEC_ERROR"):
+        print(f"  -> {status}  (time: {elapsed:.4f}s, {storage_suffix})")
+        print("  " + "!" * 62)
+        print("  !!! Any program termination - success or a deliberate   !!!")
+        print("  !!! early exit() for invalid input - must return exit  !!!")
+        print("  !!! code 0, or the submissions site grades this test   !!!")
+        print("  !!! as \"Erro de Execução\" (zero points), regardless    !!!")
+        print("  !!! of what the program did or didn't produce.         !!!")
+        print("  " + "!" * 62)
+        print_storage_warning(peak_mb, use_valgrind)
+        if stderr.strip():
+            print(f"  stderr: {stderr.strip()[:300]}")
+        print_valgrind_log(log_path)
+        print_failure_location(
+            case_dir, quests_path, map_path, position_path, None, binary_path,
+            use_valgrind, effective_timeout, count_storage_error,
+        )
+        return "EXEC_ERROR"
 
     if status == "NO_RESULTS_FILE":
         print(f"  -> NO RESULTS FILE produced  (time: {elapsed:.4f}s, {storage_suffix})")
@@ -1476,6 +1507,7 @@ def main():
         "MISMATCH": 0,
         "CRASH": 0,
         "VALGRIND_ERROR": 0,
+        "EXEC_ERROR": 0,
         "STORAGE_ERROR": 0,
         "TIMEOUT": 0,
         "NO_RESULTS_FILE": 0,
