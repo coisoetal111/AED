@@ -37,7 +37,7 @@ for (int i = 0; i < cities; i++) cluster_head[i] = 0;
 void QuestsMan(FILE* results, FILE* quests, int* cluster_head, int cluster_counter, int cities, int* clusters, City *Cities){
     int quest = 0;
     int h;
-    while ((fscanf(quests, "Task%d", &quest) == 1)){
+    while ((fscanf(quests, " Task%d", &quest) == 1)){
         switch (quest){
             case 1:
                 Task1(cluster_counter, results);
@@ -71,13 +71,9 @@ void WCQU(int operations, FILE* map, int* clusters, int cities){
       size[i] = 1;
    }
    
-   while ((fscanf(map, "%d %d", &p, &q) == 2) && k < operations) {
+   while (k < operations && fscanf(map, " %d %d", &p, &q) == 2) {
       k++;
-    
-
-    if (p < 1 || p > cities || q < 1 || q > cities) {
-         exit(0);
-      }
+      if(p < 1 || p > cities || q < 1 || q > cities) exit(0);
       for (i = p; i != clusters[i - 1]; i = clusters[i - 1]); 
       for (j = q; j != clusters[j - 1]; j = clusters[j - 1]);
       if (i == j) {
@@ -104,7 +100,7 @@ void WCQU(int operations, FILE* map, int* clusters, int cities){
       }
 }
 
- for(k = 1; k <= cities; k++){
+ for(int k = 1; k <= cities; k++){
          int root = k;
          while(root != clusters[root - 1]) root = clusters[root - 1];
          clusters[k - 1] = root;

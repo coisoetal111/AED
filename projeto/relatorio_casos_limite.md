@@ -5,7 +5,7 @@
 
 | # | Caso | Veredicto | Detalhe |
 |---|---|---|---|
-| 1 | 1 cidade, sem ligações, Task1-4 | ✅ OK | 0.01s |
+| 1 | 1 cidade, sem ligações, Task1-4 | ✅ OK | 0.00s |
 | 2 | tudo ligado -> Task3/4 dão -2 | ✅ OK | 0.00s |
 | 3 | nenhuma ligação (todos isolados) | ✅ OK | 0.00s |
 | 4 | cidade 0 / negativa / C+1 (fora do mapa) | ✅ OK | 0.00s |
@@ -19,7 +19,7 @@
 | 12 | ficheiro .quests vazio | ✅ OK | 0.00s |
 | 13 | L=0 com cabeçalho só | ✅ OK | 0.00s |
 | 14 | L maior que nº de linhas reais | ✅ OK | 0.00s |
-| 15 | L menor que nº de linhas reais (linhas extra) | ✅ OK | 0.00s |
+| 15 | L menor que nº de linhas reais (linhas extra) | ✅ OK | 0.01s |
 
 ## B. formato do .quests
 
@@ -27,11 +27,11 @@
 |---|---|---|---|
 | 1 | fim de linha CRLF (Windows) | ✅ OK | 0.00s |
 | 2 | sem \n no fim do ficheiro | ✅ OK | 0.00s |
-| 3 | linha em branco no meio | ❌ FALHA | esperado 'Task1 5\n\nTask3 1 5\n\n' / obtido 'Task1 5\n\n' |
+| 3 | linha em branco no meio | ✅ OK | 0.00s |
 | 4 | linha em branco no fim | ✅ OK | 0.00s |
 | 5 | espaços no fim das linhas | ✅ OK | 0.00s |
 | 6 | espaços/tab antes do número | ✅ OK | 0.00s |
-| 7 | espaços no início da linha | ❌ FALHA | esperado 'Task1 5\n\nTask3 1 5\n\n' / obtido '(ficheiro vazio)' |
+| 7 | espaços no início da linha | ✅ OK | 0.00s |
 | 8 | Task3 sem argumento | ℹ️ INFO: pára de processar | 'Task1 5\n\n' |
 | 9 | Task3 com argumento não numérico | ℹ️ INFO: pára de processar | 'Task1 5\n\n' |
 | 10 | Task desconhecida (Task9) | ✅ OK (continua) | 'Task1 5\n\nTask2 5\nCluster: 1 2\nCluster: 3\nCluster: 4\nCluster: 5\nCluster: 6\n\n' |
@@ -108,17 +108,17 @@
 
 | # | Caso | Veredicto | Detalhe |
 |---|---|---|---|
-| 1 | Task1 | 200k cidades sem ligações | ✅ OK | 8.68s |
-| 2 | Task2 | 50k cidades, todas isoladas | ✅ OK | 1.70s |
-| 3 | Task2 | 100k cidades, todas isoladas | ✅ OK | 6.84s |
-| 4 | Task2 | 100k cidades, ~metade ligadas (muitos clusters) | ✅ OK | 3.06s |
-| 5 | Task1+Task2 | 300k cidades, 1 cluster (cadeia) | ✅ OK | 0.12s |
-| 6 | Task3 x1000 | 100k cidades | ✅ OK | 0.90s |
-| 7 | Task4 x20 | 100k cidades, clusters pequenos | ✅ OK | 1.03s |
-| 8 | Task4 x1000 | 20k cidades | ✅ OK | 1.00s |
-| 9 | Task4 x1 | 2 clusters grandes (50k+50k) | ✅ OK | 4.56s |
+| 1 | Task1 | 200k cidades sem ligações | ✅ OK | 8.65s |
+| 2 | Task2 | 50k cidades, todas isoladas | ✅ OK | 1.64s |
+| 3 | Task2 | 100k cidades, todas isoladas | ✅ OK | 6.50s |
+| 4 | Task2 | 100k cidades, ~metade ligadas (muitos clusters) | ✅ OK | 2.94s |
+| 5 | Task1+Task2 | 300k cidades, 1 cluster (cadeia) | ✅ OK | 0.11s |
+| 6 | Task3 x1000 | 100k cidades | ✅ OK | 0.87s |
+| 7 | Task4 x20 | 100k cidades, clusters pequenos | ✅ OK | 1.00s |
+| 8 | Task4 x1000 | 20k cidades | ✅ OK | 0.97s |
+| 9 | Task4 x1 | 2 clusters grandes (50k+50k) | ✅ OK | 4.43s |
 | 10 | Task4 x1 | cluster gigante + 1 cidade fora (n=300k) | ❌ LENTO (>10 s) | cortado aos 15 s |
 | 11 | Task4 x100 | cluster gigante + 1 cidade fora (n=300k) | ❌ LENTO (>10 s) | cortado aos 15 s |
 | 12 | mapa grande: 500k cidades, 2M ligações, Task1 | ✅ OK | 0.48s |
 
-**Total: 85 casos, 6 falhas.**
+**Total: 85 casos, 4 falhas.**
