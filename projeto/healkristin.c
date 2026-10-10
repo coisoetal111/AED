@@ -7,7 +7,7 @@ int main(int argc, char **argv){
     FILE *quests = NULL;
     FILE *position = NULL;
     FILE *results = NULL;
-    char result[1024];
+    char filenameResult[1024];
     int cities = 0;
 
     //verificação do numero de argumentos corretos
@@ -18,7 +18,8 @@ int main(int argc, char **argv){
         arg[i -1] =  argv[i];
         
     }
- 
+    
+    
     //verificação do tipo de ficheiros corretos
     for (int i = 0; i < 3; i++){
         int j = strlen(arg[i]);
@@ -31,21 +32,22 @@ int main(int argc, char **argv){
                 if (strcmp(temp_, ".quests") == 0){
                     quests = fopen(arg[i], "r");
                     arg[i][j - h] = '\0';
-                    sprintf(result, "%s.results", arg[i]);
+                    sprintf(filenameResult, "%s.results", arg[i]);
                     arg[i][j - h] = '.';
-                    results = fopen(result,"w");
+                     
                 }
                 else if (strcmp(temp_, ".map") == 0) map = fopen(arg[i], "r");
                 else if( strcmp(temp_, ".position") == 0) position = fopen(arg[i], "r");
                 else exit(0);
-                continue;
+                break;
+                
            
             }
         }
     
     }
-    if(map == NULL || position == NULL || quests == NULL || results == NULL) exit(0); 
- 
+    if(map == NULL || position == NULL || quests == NULL) exit(0); 
+   
     //contagem do número de cidades
 
     int operations;
@@ -75,13 +77,13 @@ int main(int argc, char **argv){
         Cities[num - 1].x = x;
         Cities[num - 1].y = y;
     }
- 
+
     int *cluster_head = malloc(cities * sizeof(int));
     if(cluster_head == NULL) exit(0);
 
-
     int cluster_counter = ClusterMan(clusters, cities, cluster_head);
 
+    results = fopen(filenameResult, "w");
     QuestsMan(results,  quests,  cluster_head,  cluster_counter,  cities,  clusters, Cities);
 
     fclose(map);

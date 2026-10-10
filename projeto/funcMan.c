@@ -62,7 +62,7 @@ void QuestsMan(FILE* results, FILE* quests, int* cluster_head, int cluster_count
 
 void WCQU(int operations, FILE* map, int* clusters, int cities){
 
-   int i, j, p, q, t, x;
+   int i, j, p, q, t, x, k = 0;
    int *size = (int *) malloc(cities * sizeof(int));
    if (size == NULL) exit(0);
   
@@ -71,8 +71,13 @@ void WCQU(int operations, FILE* map, int* clusters, int cities){
       size[i] = 1;
    }
    
-   while ((fscanf(map, "%d %d", &p, &q) == 2)) {
+   while ((fscanf(map, "%d %d", &p, &q) == 2) && k < operations) {
+      k++;
     
+
+    if (p < 1 || p > cities || q < 1 || q > cities) {
+         exit(0);
+      }
       for (i = p; i != clusters[i - 1]; i = clusters[i - 1]); 
       for (j = q; j != clusters[j - 1]; j = clusters[j - 1]);
       if (i == j) {
@@ -98,7 +103,8 @@ void WCQU(int operations, FILE* map, int* clusters, int cities){
          clusters[j - 1] = t;
       }
 }
- for(int k = 1; k <= cities; k++){
+
+ for(k = 1; k <= cities; k++){
          int root = k;
          while(root != clusters[root - 1]) root = clusters[root - 1];
          clusters[k - 1] = root;

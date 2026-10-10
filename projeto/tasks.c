@@ -10,7 +10,6 @@ void Task1(int cluster_counter, FILE* results){
 void Task2(int* cluster_head, int cluster_counter, int cities, int* clusters, FILE* results){
 
     int j = 0;
-    
     fprintf(results, "Task2 %d", cluster_counter);
     fprintf(results, "\nCluster: ");
     int first = 1;
