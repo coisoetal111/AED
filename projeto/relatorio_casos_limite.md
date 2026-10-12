@@ -6,40 +6,32 @@
 | # | Caso | Veredicto | Detalhe |
 |---|---|---|---|
 | 1 | 1 cidade, sem ligações, Task1-4 | ✅ OK | 0.01s |
-| 2 | tudo ligado -> Task3/4 dão -2 | ✅ OK | 0.01s |
-| 3 | nenhuma ligação (todos isolados) | ✅ OK | 0.01s |
-| 4 | cidade 0 / negativa / C+1 (fora do mapa) | ✅ OK | 0.01s |
-| 5 | ligações duplicadas, invertidas e auto-laços | ✅ OK | 0.01s |
-| 6 | mesmo Task3 repetido para cidades diferentes | ✅ OK | 0.01s |
-| 7 | empate de distância -> menor número de cidade (Task3) | ✅ OK | 0.01s |
-| 8 | empate de distância em Task4 | ✅ OK | 0.01s |
-| 9 | Task4 != Task3 (exemplo do enunciado) | ✅ OK | 0.01s |
-| 10 | coordenadas 60000 (overflow int nas distâncias) | ✅ OK | 0.00s |
-<<<<<<< Updated upstream
+| 2 | tudo ligado -> Task3/4 dão -2 | ✅ OK | 0.00s |
+| 3 | nenhuma ligação (todos isolados) | ✅ OK | 0.00s |
+| 4 | cidade 0 / negativa / C+1 (fora do mapa) | ✅ OK | 0.00s |
+| 5 | ligações duplicadas, invertidas e auto-laços | ✅ OK | 0.00s |
+| 6 | mesmo Task3 repetido para cidades diferentes | ✅ OK | 0.00s |
+| 7 | empate de distância -> menor número de cidade (Task3) | ✅ OK | 0.00s |
+| 8 | empate de distância em Task4 | ✅ OK | 0.00s |
+| 9 | Task4 != Task3 (exemplo do enunciado) | ✅ OK | 0.00s |
+| 10 | coordenadas 60000 (overflow int nas distâncias) | ✅ OK | 0.01s |
 | 11 | coordenadas até 2e9 (long long necessário) | ✅ OK | 0.00s |
-| 12 | ficheiro .quests vazio | ✅ OK | 0.01s |
-| 13 | L=0 com cabeçalho só | ✅ OK | 0.01s |
+| 12 | ficheiro .quests vazio | ✅ OK | 0.00s |
+| 13 | L=0 com cabeçalho só | ✅ OK | 0.00s |
 | 14 | L maior que nº de linhas reais | ✅ OK | 0.00s |
 | 15 | L menor que nº de linhas reais (linhas extra) | ✅ OK | 0.00s |
-=======
-| 11 | coordenadas até 2e9 (long long necessário) | ✅ OK | 0.01s |
-| 12 | ficheiro .quests vazio | ✅ OK | 0.01s |
-| 13 | L=0 com cabeçalho só | ✅ OK | 0.01s |
-| 14 | L maior que nº de linhas reais | ✅ OK | 0.01s |
-| 15 | L menor que nº de linhas reais (linhas extra) | ✅ OK | 0.01s |
->>>>>>> Stashed changes
 
 ## B. formato do .quests
 
 | # | Caso | Veredicto | Detalhe |
 |---|---|---|---|
-| 1 | fim de linha CRLF (Windows) | ✅ OK | 0.01s |
-| 2 | sem \n no fim do ficheiro | ✅ OK | 0.01s |
-| 3 | linha em branco no meio | ✅ OK | 0.01s |
-| 4 | linha em branco no fim | ✅ OK | 0.01s |
-| 5 | espaços no fim das linhas | ✅ OK | 0.01s |
-| 6 | espaços/tab antes do número | ✅ OK | 0.01s |
-| 7 | espaços no início da linha | ✅ OK | 0.01s |
+| 1 | fim de linha CRLF (Windows) | ✅ OK | 0.00s |
+| 2 | sem \n no fim do ficheiro | ✅ OK | 0.00s |
+| 3 | linha em branco no meio | ✅ OK | 0.00s |
+| 4 | linha em branco no fim | ✅ OK | 0.00s |
+| 5 | espaços no fim das linhas | ✅ OK | 0.00s |
+| 6 | espaços/tab antes do número | ✅ OK | 0.00s |
+| 7 | espaços no início da linha | ✅ OK | 0.00s |
 | 8 | Task3 sem argumento | ℹ️ INFO: pára de processar | 'Task1 5\n\n' |
 | 9 | Task3 com argumento não numérico | ℹ️ INFO: pára de processar | 'Task1 5\n\n' |
 | 10 | Task desconhecida (Task9) | ✅ OK (continua) | 'Task1 5\n\nTask2 5\nCluster: 1 2\nCluster: 3\nCluster: 4\nCluster: 5\nCluster: 6\n\n' |
@@ -91,13 +83,13 @@
 
 | # | Caso | Veredicto | Detalhe |
 |---|---|---|---|
-| 1 | nome com vários pontos (a.b.quests) | ✅ OK | 0.01s |
-| 2 | caminho relativo ./x.quests ./x.map ./x.position | ✅ OK | 0.01s |
-| 3 | caminho com directório com ponto (dir.v1/t.quests) | ✅ OK | 0.01s |
-| 4 | nome só números (013.quests) | ✅ OK | 0.01s |
-| 5 | nome com espaço (a b.quests) | ✅ OK | 0.01s |
-| 6 | nome com 200 caracteres | ✅ OK | 0.01s |
-| 7 | mesmo nome base nos 3 (x.quests x.map x.position) | ✅ OK | 0.01s |
+| 1 | nome com vários pontos (a.b.quests) | ✅ OK | 0.00s |
+| 2 | caminho relativo ./x.quests ./x.map ./x.position | ✅ OK | 0.00s |
+| 3 | caminho com directório com ponto (dir.v1/t.quests) | ✅ OK | 0.00s |
+| 4 | nome só números (013.quests) | ✅ OK | 0.00s |
+| 5 | nome com espaço (a b.quests) | ✅ OK | 0.00s |
+| 6 | nome com 200 caracteres | ✅ OK | 0.00s |
+| 7 | mesmo nome base nos 3 (x.quests x.map x.position) | ✅ OK | 0.00s |
 | 8 | 0 argumentos | ✅ OK | sem output |
 | 9 | 2 argumentos | ✅ OK | sem output |
 | 10 | 4 argumentos | ✅ OK | sem output |
@@ -116,32 +108,17 @@
 
 | # | Caso | Veredicto | Detalhe |
 |---|---|---|---|
-<<<<<<< Updated upstream
-| 1 | Task1 | 200k cidades sem ligações | ✅ OK | 8.64s |
-| 2 | Task2 | 50k cidades, todas isoladas | ✅ OK | 1.63s |
-| 3 | Task2 | 100k cidades, todas isoladas | ✅ OK | 6.49s |
-| 4 | Task2 | 100k cidades, ~metade ligadas (muitos clusters) | ✅ OK | 2.91s |
-| 5 | Task1+Task2 | 300k cidades, 1 cluster (cadeia) | ✅ OK | 0.11s |
+| 1 | Task1 | 200k cidades sem ligações | ✅ OK | 0.04s |
+| 2 | Task2 | 50k cidades, todas isoladas | ✅ OK | 0.02s |
+| 3 | Task2 | 100k cidades, todas isoladas | ✅ OK | 0.03s |
+| 4 | Task2 | 100k cidades, ~metade ligadas (muitos clusters) | ✅ OK | 3.00s |
+| 5 | Task1+Task2 | 300k cidades, 1 cluster (cadeia) | ✅ OK | 0.12s |
 | 6 | Task3 x1000 | 100k cidades | ✅ OK | 0.88s |
-| 7 | Task4 x20 | 100k cidades, clusters pequenos | ✅ OK | 1.01s |
-| 8 | Task4 x1000 | 20k cidades | ✅ OK | 0.96s |
-| 9 | Task4 x1 | 2 clusters grandes (50k+50k) | ✅ OK | 4.51s |
-| 10 | Task4 x1 | cluster gigante + 1 cidade fora (n=300k) | ❌ LENTO (>10 s) | cortado aos 15 s |
-| 11 | Task4 x100 | cluster gigante + 1 cidade fora (n=300k) | ❌ LENTO (>10 s) | cortado aos 15 s |
-| 12 | mapa grande: 500k cidades, 2M ligações, Task1 | ✅ OK | 0.47s |
-=======
-| 1 | Task1 | 200k cidades sem ligações | ✅ OK | 9.27s |
-| 2 | Task2 | 50k cidades, todas isoladas | ✅ OK | 1.80s |
-| 3 | Task2 | 100k cidades, todas isoladas | ✅ OK | 7.19s |
-| 4 | Task2 | 100k cidades, ~metade ligadas (muitos clusters) | ✅ OK | 3.22s |
-| 5 | Task1+Task2 | 300k cidades, 1 cluster (cadeia) | ✅ OK | 0.17s |
-| 6 | Task3 x1000 | 100k cidades | ✅ OK | 1.02s |
-| 7 | Task4 x20 | 100k cidades, clusters pequenos | ✅ OK | 1.29s |
-| 8 | Task4 x1000 | 20k cidades | ✅ OK | 1.72s |
-| 9 | Task4 x1 | 2 clusters grandes (50k+50k) | ✅ OK | 5.89s |
-| 10 | Task4 x1 | cluster gigante + 1 cidade fora (n=300k) | ❌ LENTO (>10 s) | cortado aos 15 s |
-| 11 | Task4 x100 | cluster gigante + 1 cidade fora (n=300k) | ❌ LENTO (>10 s) | cortado aos 15 s |
-| 12 | mapa grande: 500k cidades, 2M ligações, Task1 | ✅ OK | 0.62s |
->>>>>>> Stashed changes
+| 7 | Task4 x20 | 100k cidades, clusters pequenos | ✅ OK | 1.03s |
+| 8 | Task4 x1000 | 20k cidades | ✅ OK | 1.11s |
+| 9 | Task4 x1 | 2 clusters grandes (50k+50k) | ✅ OK | 4.30s |
+| 10 | Task4 x1 | cluster gigante + 1 cidade fora (n=300k) | ✅ OK | 0.11s |
+| 11 | Task4 x100 | cluster gigante + 1 cidade fora (n=300k) | ✅ OK | 0.20s |
+| 12 | mapa grande: 500k cidades, 2M ligações, Task1 | ✅ OK | 0.49s |
 
-**Total: 85 casos, 2 falhas.**
+**Total: 85 casos, 0 falhas.**

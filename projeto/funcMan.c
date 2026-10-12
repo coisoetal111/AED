@@ -2,7 +2,11 @@
 
 
 
-int ClusterMan(int* clusters, int cities, int* cluster_head){
+int ClusterMan(int* clusters, int cities, int* cluster_head, int operations){
+if(operations == 0){
+    for (int i = 0; i < cities; i++) cluster_head[i] = i + 1; 
+    return cities;
+}
 for (int i = 0; i < cities; i++) cluster_head[i] = 0;
 
  int temp_ = 0;
@@ -45,13 +49,11 @@ void QuestsMan(FILE* results, FILE* quests, int* cluster_head, int cluster_count
             case 2:
                  Task2(cluster_head, cluster_counter, cities, clusters, results);
                  break;
-            //coming soon (im here baby ;;;)))))) LEEEEEEEESSSSSSSSSS GOOOOOOOOOOOOOO
             case 3:
-                Task3(quests, Cities, cities, clusters, results);
+                Task3(quests, Cities, cities, clusters, results, cluster_counter);
                 break;
-            //task4 coming soon... fds despachate la (começando as 1 da manha)
             case 4:
-                Task4(quests, Cities, cities, clusters, results);
+                Task4(quests, Cities, cities, clusters, results, cluster_counter);
                 break;
         }
          while((h = fgetc(quests)) != '\n' && h != EOF);
@@ -61,6 +63,11 @@ void QuestsMan(FILE* results, FILE* quests, int* cluster_head, int cluster_count
 
 
 void WCQU(int operations, FILE* map, int* clusters, int cities){
+    
+    if(operations == 0){
+         for (int i = 0; i < cities; i++) clusters[i] = i + 1; 
+        return;
+    }
 
    int i, j, p, q, t, x, k = 0;
    int *size = (int *) malloc(cities * sizeof(int));

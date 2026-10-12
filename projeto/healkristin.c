@@ -98,7 +98,7 @@ int main(int argc, char **argv){
     int *cluster_head = malloc(cities * sizeof(int));
     if(cluster_head == NULL) exit(0);
 
-    int cluster_counter = ClusterMan(clusters, cities, cluster_head);
+    int cluster_counter = ClusterMan(clusters, cities, cluster_head, operations);
 
     results = fopen(filenameResult, "w");
     QuestsMan(results,  quests,  cluster_head,  cluster_counter,  cities,  clusters, Cities);
