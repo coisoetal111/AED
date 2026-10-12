@@ -12,6 +12,7 @@ healkristin
 *.pdf
 *.zip
 *.7z
+*.md
 
 # Ignorar pastas de sistema
 .vscode/
