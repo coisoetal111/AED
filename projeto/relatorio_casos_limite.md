@@ -14,10 +14,10 @@
 | 7 | empate de distância -> menor número de cidade (Task3) | ✅ OK | 0.00s |
 | 8 | empate de distância em Task4 | ✅ OK | 0.00s |
 | 9 | Task4 != Task3 (exemplo do enunciado) | ✅ OK | 0.00s |
-| 10 | coordenadas 60000 (overflow int nas distâncias) | ✅ OK | 0.01s |
+| 10 | coordenadas 60000 (overflow int nas distâncias) | ✅ OK | 0.00s |
 | 11 | coordenadas até 2e9 (long long necessário) | ✅ OK | 0.00s |
 | 12 | ficheiro .quests vazio | ✅ OK | 0.00s |
-| 13 | L=0 com cabeçalho só | ✅ OK | 0.00s |
+| 13 | L=0 com cabeçalho só | ✅ OK | 0.01s |
 | 14 | L maior que nº de linhas reais | ✅ OK | 0.00s |
 | 15 | L menor que nº de linhas reais (linhas extra) | ✅ OK | 0.00s |
 
@@ -108,17 +108,17 @@
 
 | # | Caso | Veredicto | Detalhe |
 |---|---|---|---|
-| 1 | Task1 | 200k cidades sem ligações | ✅ OK | 0.04s |
+| 1 | Task1 | 200k cidades sem ligações | ✅ OK | 0.07s |
 | 2 | Task2 | 50k cidades, todas isoladas | ✅ OK | 0.02s |
-| 3 | Task2 | 100k cidades, todas isoladas | ✅ OK | 0.03s |
-| 4 | Task2 | 100k cidades, ~metade ligadas (muitos clusters) | ✅ OK | 3.00s |
-| 5 | Task1+Task2 | 300k cidades, 1 cluster (cadeia) | ✅ OK | 0.12s |
-| 6 | Task3 x1000 | 100k cidades | ✅ OK | 0.88s |
-| 7 | Task4 x20 | 100k cidades, clusters pequenos | ✅ OK | 1.03s |
-| 8 | Task4 x1000 | 20k cidades | ✅ OK | 1.11s |
-| 9 | Task4 x1 | 2 clusters grandes (50k+50k) | ✅ OK | 4.30s |
-| 10 | Task4 x1 | cluster gigante + 1 cidade fora (n=300k) | ✅ OK | 0.11s |
-| 11 | Task4 x100 | cluster gigante + 1 cidade fora (n=300k) | ✅ OK | 0.20s |
-| 12 | mapa grande: 500k cidades, 2M ligações, Task1 | ✅ OK | 0.49s |
+| 3 | Task2 | 100k cidades, todas isoladas | ✅ OK | 0.04s |
+| 4 | Task2 | 100k cidades, ~metade ligadas (muitos clusters) | ✅ OK | 0.07s |
+| 5 | Task1+Task2 | 300k cidades, 1 cluster (cadeia) | ✅ OK | 0.17s |
+| 6 | Task3 x1000 | 100k cidades | ✅ OK | 0.20s |
+| 7 | Task4 x20 | 100k cidades, clusters pequenos | ✅ OK | 0.42s |
+| 8 | Task4 x1000 | 20k cidades | ✅ OK | 1.21s |
+| 9 | Task4 x1 | 2 clusters grandes (50k+50k) | ✅ OK | 4.90s |
+| 10 | Task4 x1 | cluster gigante + 1 cidade fora (n=300k) | ✅ OK | 0.15s |
+| 11 | Task4 x100 | cluster gigante + 1 cidade fora (n=300k) | ✅ OK | 0.23s |
+| 12 | mapa grande: 500k cidades, 2M ligações, Task1 | ✅ OK | 0.59s |
 
 **Total: 85 casos, 0 falhas.**

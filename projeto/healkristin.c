@@ -12,56 +12,27 @@ int main(int argc, char **argv){
 
     //verificação do numero de argumentos corretos
     if(argc!=4) exit(0);
-    char *arg[3];
-
-    for (int i = 1; i < argc; i++) {
-        arg[i -1] =  argv[i];
-        
-    }
-    
-    
+ 
     //verificação do tipo de ficheiros corretos
-    //for (int i = 0; i < 3; i++){
-        int j = strlen(arg[0]);
-        char temp;
-        char *temp_;
-        for (int h = 0; h < j; h++){
-            temp = arg[0][j - h];
-            if(temp == '.'){  
-                temp_ = &arg[0][j-h];
-                if (strcmp(temp_, ".quests") == 0){
-                    quests = fopen(arg[0], "r");
-                    arg[0][j - h] = '\0';
-                    sprintf(filenameResult, "%s.results", arg[0]);
-                    arg[0][j - h] = '.';
-                     
-                }
-                else exit(0);
-                break;
-            }
+    int j = strlen(argv[1]);
+    char *temp_;
+    temp_ = &argv[1][j-7];
+    if (strcmp(temp_, ".quests") == 0){
+        quests = fopen(argv[1], "r");
+        argv[1][j - 7] = '\0';
+        sprintf(filenameResult, "%s.results", argv[1]);
+        argv[1][j - 7] = '.';     
         }
-        j = strlen(arg[1]);
-        for (int h = 0; h < j; h++){
-            temp = arg[1][j - h];
-            if(temp == '.'){  
-                temp_ = &arg[1][j-h];
-                if (strcmp(temp_, ".map") == 0) map = fopen(arg[1], "r");
-                else exit(0);
-                break;
-            }
-        }
-        j = strlen(arg[2]);
-        for (int h = 0; h < j; h++){
-            temp = arg[2][j - h];
-            if(temp == '.'){  
-                temp_ = &arg[2][j-h];
-                if( strcmp(temp_, ".position") == 0) position = fopen(arg[2], "r");
-                else exit(0);
-                break;
-            }
-        }
-    //}
-    if(map == NULL || position == NULL || quests == NULL) exit(0); 
+        else exit(0);
+    j = strlen(argv[2]);
+            temp_ = &argv[2][j-4];
+            if (strcmp(temp_, ".map") == 0) map = fopen(argv[2], "r");
+            else exit(0);
+    j = strlen(argv[3]);  
+        temp_ = &argv[3][j-9];
+        if( strcmp(temp_, ".position") == 0) position = fopen(argv[3], "r");
+        else exit(0);    
+     if(map == NULL || position == NULL || quests == NULL) exit(0); 
    
     //contagem do número de cidades
 
@@ -113,7 +84,4 @@ int main(int argc, char **argv){
     return 0;
  
 }
-
-
-
 
