@@ -36,7 +36,7 @@ int exchCnt = 0;
  * Returns: (void)
  * Side-Effects: table is sorted in place
  *
- * Description: implements "some" sorting algorithm for abstract type (Item),
+ * Description: implements BUBLESORT!!!!! algorithm for abstract type (Item),
  *       using also an abstract type comparison function (*less)
  *           a[] - array of abstract type Item to be sorted
  *           l - index of first element in the array to be sorted
@@ -120,7 +120,7 @@ int main(int argc, char **argv)
   enum sort_criteria criterio = magnitude;
   enum sort_order sentido  = ascending;
 
-
+  
   if (argc <= 1) {
     fprintf(stderr, "Need at least one parameter, the input file name.\n");
     exit(1);
@@ -171,21 +171,28 @@ int main(int argc, char **argv)
   if ((criterio == magnitude) && (sentido == ascending)) {
 
     /*==== TODO ====*/
+    sort( (Item*) vtab, 0 , Ndistelems - 1, LessMagnitude);
 
   }
   else if ((criterio == magnitude) && (sentido == descending)) {
 
     /*==== TODO ====*/
+    sort( (Item*) vtab, 0 , Ndistelems - 1, MoreMagnitude);
+
 
   }
   else if ((criterio == occurrences) && (sentido == ascending)) {
 
     /*==== TODO ====*/
+    sort( (Item*) vtab, 0 , Ndistelems - 1, LessNumUses);
+
 
   }
   else if ((criterio == occurrences) && (sentido == descending)) {
 
     /*==== TODO ====*/
+    sort( (Item*) vtab, 0 , Ndistelems - 1, MoreNumUses);
+
 
   }
 
@@ -200,6 +207,6 @@ int main(int argc, char **argv)
   /*==== TODO ====*/
 
   /* ------------------------------------------------------------ */
-
+  free(vtab);
   return 0;
 }

@@ -281,3 +281,27 @@ int LessMagnitude(Item a, Item b)
 
     /*==== TODO ====*/
 
+
+
+int  MoreMagnitude(Item a, Item b)
+{
+  if ((((IntO *) a)->num > ((IntO *) b)->num))
+    return 1;
+  else
+    return 0;
+}
+int  LessNumUses(Item a, Item b)
+{
+  if ((((IntO *) a)->numRepeat < ((IntO *) b)->numRepeat))
+    return 1;
+  else
+    return 0;
+}
+int  MoreNumUses(Item a, Item b)
+{
+  if ((((IntO *) a)->numRepeat > ((IntO *) b)->numRepeat))
+    return 1;
+  else
+    return 0;
+}
+
