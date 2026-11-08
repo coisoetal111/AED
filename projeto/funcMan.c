@@ -55,6 +55,8 @@ void QuestsMan(FILE* results, FILE* quests, int* cluster_head, int cluster_count
             case 4:
                 Task4(quests, Cities, cities, clusters, results, cluster_counter);
                 break;
+            case 5:
+                Task5(Cities, cities, cluster, results);
         }
          while((h = fgetc(quests)) != '\n' && h != EOF);
     }

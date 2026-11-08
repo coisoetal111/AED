@@ -71,6 +71,8 @@ int main(int argc, char **argv){
 
     int cluster_counter = ClusterMan(clusters, cities, cluster_head, operations);
 
+    
+
     results = fopen(filenameResult, "w");
     QuestsMan(results,  quests,  cluster_head,  cluster_counter,  cities,  clusters, Cities);
 
