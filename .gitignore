@@ -16,6 +16,7 @@ healkristin
 *.vec
 *.tmp
 *.sorted
+*.adj
 
 # Ignorar pastas de sistema
 .vscode/
