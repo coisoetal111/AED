@@ -36,7 +36,7 @@ int exchCnt = 0;
  * Returns: (void)
  * Side-Effects: table is sorted in place
  *
- * Description: implements BUBLESORT!!!!! algorithm for abstract type (Item),
+ * Description: implements QUICK SORT!!!!! algorithm for abstract type (Item),
  *       using also an abstract type comparison function (*less)
  *           a[] - array of abstract type Item to be sorted
  *           l - index of first element in the array to be sorted
@@ -206,8 +206,8 @@ int main(int argc, char **argv)
   /* -- Insert code to call functions to free allocated memory -- */
 
   /*==== TODO ====*/
-
+  FreeArray(vtab, Ndistelems);
   /* ------------------------------------------------------------ */
-  free(vtab);
+  
   return 0;
 }
