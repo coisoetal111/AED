@@ -17,7 +17,8 @@ healkristin
 *.tmp
 *.sorted
 *.adj
-
+*.ladj
+*.edge
 # Ignorar pastas de sistema
 .vscode/
 projeto/build/
