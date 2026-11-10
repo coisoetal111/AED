@@ -348,10 +348,22 @@ void GRAPHremoveE(Graph *G, Edge *e)
 Graph *GRAPHreadMat(FILE *fp)
 {
   Graph *G = NULL;
-  
-  /*==== TODO:
-   *====*/
-  
+  int V, i, j, wt;
+
+  if (fscanf(fp, "%d", &V) != 1) return NULL;
+  G = GRAPHinit(V);
+
+  for (i = 0; i < V; i++) {
+    for (j = 0; j < V; j++) {
+      if (fscanf(fp, "%d", &wt) != 1) wt = 0;
+      if (wt > 0) {
+        Edge *e = EDGE(i, j, wt);
+        GRAPHinsertE(G, e);
+        EDGEdestroy(e);
+      }
+    }
+  }
+
   return G;
 }
 
@@ -401,6 +413,12 @@ int GRAPHmaxDegree(Graph *G)
   
   /*==== TODO:
    *====*/
+  for (int i = 0; i < G->V; i++) {
+    int deg = GRAPHdegree(G, i);
+    if (deg > maxDeg) {
+      maxDeg = deg;
+    }
+  }
   
   return maxDeg;
 }
@@ -422,7 +440,7 @@ double GRAPHdensity(Graph *G)
    * Compute and return the graph density: 2.0 * E / V.
    *====*/
   
-  return 0.0;
+  return 2.0*G->E / G->V;
 }
 
 
@@ -466,6 +484,17 @@ void GRAPHmatToList(Graph *G)
   
   /*==== TODO:
    *====*/
+  
+  for (int v = 0; v < G->V; v++) {
+    for (int w = 0; w < G->V; w++) {
+      int wt = G->adj[v][w];
+      if (wt > 0) {
+        AdjNode *node = newAdjNode(w, wt);
+        int err;
+        G->ladj[v] = insertSortedLinkedList(G->ladj[v], node, compareAdjNodes, &err);
+      }
+    }
+  }
 
 
   return;
@@ -523,6 +552,17 @@ int GRAPHlistToEdges(Edge *a[], Graph *G)
   
   /*==== TODO:
    *====*/
+  for(int v = 0; v < G->V; v++) {
+    LinkedList *aux;
+    for (aux = G->ladj[v]; aux != NULL; aux = getNextNodeLinkedList(aux)) {
+      AdjNode *node = (AdjNode *) getItemLinkedList(aux);
+      int w = node->v;
+      int wt = node->wt;
+      if (v < w) {
+        a[eCount++] = EDGE(v, w, wt);
+      }
+    }
+  }
   
   return eCount;
 }
@@ -573,8 +613,16 @@ void GRAPHwriteEdges(Edge *a[], int E, int V, FILE *fp)
 
 void dfsR(Graph *G, int v, int pre[], int *cnt)
 {
-  /*==== TODO:
-   *====*/
+  LinkedList *aux;
+  AdjNode *node;
+
+  pre[v] = (*cnt)++;
+  for (aux = G->ladj[v]; aux != NULL; aux = getNextNodeLinkedList(aux)) {
+    node = (AdjNode *) getItemLinkedList(aux);
+    if (pre[node->v] == -1) {
+      dfsR(G, node->v, pre, cnt);
+    }
+  }
 }
 
 
@@ -591,12 +639,20 @@ void dfsR(Graph *G, int v, int pre[], int *cnt)
  *               and returns the total number of connected components.
  *****************************************************************************/
 
+
+
 int GRAPHdfs(Graph *G, int pre[])
 {
-  int components = 0;
-  
-  /*==== TODO:
-   *====*/
-  
+  int v, cnt = 0, components = 0;
+
+  for (v = 0; v < G->V; v++) pre[v] = -1;
+
+  for (v = 0; v < G->V; v++) {
+    if (pre[v] == -1) {
+      components++;
+      dfsR(G, v, pre, &cnt);
+    }
+  }
+
   return components;
 }

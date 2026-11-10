@@ -71,7 +71,11 @@ int main(int argc, char *argv[])
     if (argc < 2) {
         usage(argv[0]);
     }
-
+    FILE *fpIn, *fpLadj, *fpEdge;
+    Graph *G;
+    char *ladjFile, *edgeFile;
+    Edge **edges;
+    int numE, i;
     /* =====================================================================
      * STEP 1: Read the graph from the input .adj file into an Adjacency Matrix
      *   - Open the input file argv[1] for reading.
@@ -112,7 +116,7 @@ int main(int argc, char *argv[])
      *     close the file, and free the output filename string.
      * ===================================================================== */
 
-    /************** COMMENTED ***************
+    
     GRAPHmatToList(G);
 
     ladjFile = makeOutFilename(argv[1], ".ladj");
@@ -124,7 +128,7 @@ int main(int argc, char *argv[])
     GRAPHwriteList(G, fpLadj);
     fclose(fpLadj);
     free(ladjFile);
-    ****************************************/
+    
 
 
     /* =====================================================================
@@ -141,7 +145,7 @@ int main(int argc, char *argv[])
      *     edges array and the output filename string.
      * ===================================================================== */
 
-    /************** COMMENTED ***************
+    
     edges = (Edge **) malloc(GRAPHnumEdges(G) * sizeof(Edge *));
     if (edges == NULL && GRAPHnumEdges(G) > 0) {
         fprintf(stderr, "ERROR: Not enough memory for edge vector.\n");
@@ -164,7 +168,7 @@ int main(int argc, char *argv[])
         EDGEdestroy(edges[i]);
     }
     free(edges);
-    ****************************************/
+    
 
     /* =====================================================================
      * STEP 5: Perform Graph Traversal (DFS) & print results
@@ -177,13 +181,25 @@ int main(int argc, char *argv[])
      * ===================================================================== */
 
     /*==== TODO (Step 5) ====*/
-
+    int *pre = (int *) malloc(GRAPHnumVertices(G) * sizeof(int));
+    int comps, v;
+    if (pre == NULL) {
+        fprintf(stderr, "ERROR: Not enough memory for pre[].\n");
+        exit(1);
+    }
+    comps = GRAPHdfs(G, pre);
+    printf("  Connected components = %d\n", comps);
+    
 
     /* =====================================================================
      * STEP 6: Clean up and free all memory allocated for the Graph ADT
      *   - Call GRAPHdestroy(G).
      * ===================================================================== */
 
+    for (v = 0; v < GRAPHnumVertices(G); v++) {
+        printf("  pre[%d] = %d\n", v, pre[v]);
+    }
+    free(pre);
     GRAPHdestroy(G);
 
     return 0;
