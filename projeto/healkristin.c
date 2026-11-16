@@ -17,15 +17,12 @@ int main(int argc, char **argv){
     
    
     //contagem do número de cidades
-
     int operations;
     if(fscanf(map, "%d %d", &cities, &operations) != 2) exit(0);
     if(cities <= 0 || operations < 0) exit(0);
  
-    //agrupamento em clusters
-    int *clusters = malloc(cities * sizeof(int));
-    if (clusters == NULL) exit(0);
-
+    
+    //guardar informações do position
     int X_max, Y_max;
     if(fscanf(position, "%d %d", &X_max, &Y_max) != 2) exit(0);
     if(X_max <= 0 || Y_max <= 0) exit(0);
@@ -35,6 +32,9 @@ int main(int argc, char **argv){
 
     CityMan(position, Cities, cities , X_max, Y_max);
 
+    //agrupamento em clusters
+    int *clusters = malloc(cities * sizeof(int));
+    if (clusters == NULL) exit(0);
     WCQU(operations, map, clusters, cities);
 
     SortedCity *SortedCities = malloc(cities * sizeof(SortedCity));
@@ -45,7 +45,7 @@ int main(int argc, char **argv){
 
     int cluster_counter = ClusterMan(cities, SortedCities, operations);
 
-    //guardar informações do position
+    
    
 
     
@@ -53,6 +53,7 @@ int main(int argc, char **argv){
     
 
     results = fopen(filenameResult, "w");
+    if(results == NULL) exit(0);
     QuestsMan(results,  quests,  SortedCities,  cluster_counter,  cities,  clusters, Cities);
 
     fclose(map);
