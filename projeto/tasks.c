@@ -95,53 +95,7 @@ void Task4(FILE* quests, City *Cities, int cities, int *clusters, FILE* results,
     fprintf(results, "Task4 %d %d\n\n", city_ref, closest_city_cluster);
 }
 
-long long dist2(City *a, City *b, int *cluster) {
-  if (cluster[a->city_number - 1] == cluster[b->city_number - 1]) return 0;
-  long long dx = a->x - b->x;
-  long long dy = a->y - b->y;
-  return dx*dx + dy*dy;
-}
 
-// Ordena ligações por City_in e, em caso de empate, por City_out.
-int cmpConnect(const void *x, const void *y) {
-  Connect *l = (Connect *)x;
-  Connect *r = (Connect *)y;
-  if (l->City_in != r->City_in) return l->City_in - r->City_in;
-  return l->City_out - r->City_out;
-}
-
-// Prim sobre as cidades: p[i] = pai de i, w[i] = distância² ao pai.
-void prim(City *Cities, int cities, int *cluster, int p[], long long w[]) {
-  char *naArvore = calloc(cities, 1);
-  if (naArvore == NULL) exit(1);
-
-  for (int i = 0; i < cities; i++) {
-    w[i] = LLONG_MAX;
-    p[i] = -1;
-  }
-  w[0] = 0;
-
-  for (int k = 0; k < cities; k++) {
-    // escolher a cidade fora da árvore com menor w
-    int v = -1;
-    for (int i = 0; i < cities; i++)
-      if (!naArvore[i] && (v == -1 || w[i] < w[v])) v = i;
-
-    naArvore[v] = 1;
-
-    // atualizar as restantes com a distância a v
-    for (int i = 0; i < cities; i++) {
-      if (!naArvore[i]) {
-        long long d = dist2(&Cities[v], &Cities[i], cluster);
-        if (d < w[i]) {
-          w[i] = d;
-          p[i] = v;
-        }
-      }
-    }
-  }
-  free(naArvore);
-}
 
 // Task5: comprimento mínimo de cabo para ficar com um só cluster.
 void Task5(City *Cities, int cities, int *cluster, FILE *results) {

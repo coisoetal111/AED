@@ -22,6 +22,9 @@ typedef struct{
 int ClusterMan(int* clusters, int cities, int* cluster_head,int operations);
 void QuestsMan(FILE* results, FILE* quests, int* cluster_head, int cluster_counter, int cities, int* clusters, City *Cities);
 void WCQU(int operations, FILE* map, int* clusters, int cities);
+long long dist2(City *a, City *b, int *cluster);
+int cmpConnect(const void *x, const void *y);
+void prim(City *Cities, int cities, int *cluster, int p[], long long w[]);
 void Task1(int cluster_counter, FILE* results);
 void Task2(int* cluster_head, int cluster_counter,int cities, int* clusters, FILE* results);
 void Task3(FILE* quests, City *Cities, int cities, int *clusters, FILE* results, int cluster_counter);

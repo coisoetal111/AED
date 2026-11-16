@@ -51,7 +51,7 @@ int main(int argc, char **argv){
     if(fscanf(position, "%d %d", &X_max, &Y_max) != 2) exit(0);
     if(X_max <= 0 || Y_max <= 0) exit(0);
 
-    City *Cities = calloc(cities, sizeof(City)); //inicializar a 0 para fazer comparação sem riscos
+    City *Cities = malloc(cities * sizeof(City));
     if(Cities == NULL) exit(0);
     int num, x, y;
     for(int i = 0; i < cities; i++){
