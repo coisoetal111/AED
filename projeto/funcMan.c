@@ -2,43 +2,97 @@
 
 
 
-int ClusterMan(int* clusters, int cities, int* cluster_head, int operations){
-if(operations == 0){
-    for (int i = 0; i < cities; i++) cluster_head[i] = i + 1; 
-    return cities;
-}
-for (int i = 0; i < cities; i++) cluster_head[i] = 0;
 
- int temp_ = 0;
- int found = 0;
- int cluster_counter = 1;
- for(int i = 1; i < cities; i++) if(clusters[i] != clusters[0]){ 
-    
-    if(temp_ == 0){
-         cluster_counter++;
-         temp_ ++;
-         cluster_head[0] = clusters[i];
-    }else{
-        for(int j = 0; j < temp_; j++){
-            found = 0;
-            if(cluster_head[j] == clusters[i]){
-                found = 1;
-                break;
-            }
+void FileMan(int argc, char **argv, FILE **map, FILE **quests, FILE **position, char *filenameResult){
+    //verificação do numero de argumentos corretos
+    if(argc!=4) exit(0);
+    //verificação do tipo de ficheiros corretos
+    int j = strlen(argv[1]);
+    if( j < 8) exit(0);
+    char *temp_;
+    temp_ = &argv[1][j-7];
+    if (strcmp(temp_, ".quests") == 0){
+        *quests = fopen(argv[1], "r");
+        argv[1][j - 7] = '\0';
+        sprintf(filenameResult, "%s.results", argv[1]);
+        argv[1][j - 7] = '.';     
         }
-        if(found == 0){
-            cluster_head[temp_] = clusters[i];
-            temp_ ++;
-            cluster_counter++;         
-        }
-    }
+        else exit(0);
+    j = strlen(argv[2]);
+    if( j < 5) exit(0);
+            temp_ = &argv[2][j-4];
+            if (strcmp(temp_, ".map") == 0) *map = fopen(argv[2], "r");
+            else exit(0);
+    j = strlen(argv[3]);
+    if( j < 10) exit(0);  
+        temp_ = &argv[3][j-9];
+        if( strcmp(temp_, ".position") == 0) *position = fopen(argv[3], "r");
+        else exit(0);    
+   
 }
+
+
+void SortedCityMan(SortedCity *SortedCities, int cities, int* clusters){
+    for(int i = 0; i < cities; i++){
+        SortedCities[i].city_number = i + 1;
+        SortedCities[i].cluster_root = clusters[i];
+    }
+  
+    int first = 0, last, i;
+    qsort(SortedCities, cities, sizeof(SortedCity), cmpSorted);
+    for(i = 0; i < cities; i++){
+        if(i == 0) first = i;
+        if(SortedCities[i].cluster_root != SortedCities[first].cluster_root){
+            last = i - 1;
+            for(int j = first; j <= last; j++){
+                SortedCities[j].cluster_root = SortedCities[first].city_number;
+            }
+            first = i;
+          }
+    }
+        
+    last = cities - 1;
+    for(int j = first; j <= last; j++){
+      SortedCities[j].cluster_root = SortedCities[first].city_number;
+    }
+    qsort(SortedCities, cities, sizeof(SortedCity), cmpSorted);
+    return;
+}
+
+
+
+void CityMan(FILE* map, City *Cities, int cities, int X_max, int Y_max){
+    int num, x, y;
+    for(int i = 0; i < cities; i++){
+        if(fscanf(map, "%d %d %d", &num, &x, &y) != 3) exit(0);
+        if(num < 1 || num > cities || x <= 0 || y <= 0 || x > X_max || y > Y_max) exit(0);
+        Cities[i].city_number = num;
+        Cities[i].x = x;
+        Cities[i].y = y;
+    }
+    
+    return;
+}
+
+int ClusterMan(int cities, SortedCity *SortedCities, int operations){
+
+if(operations == 0) return cities;
+
+ int cluster_counter = 1, a = 0;
+ for(int i = 1; i < cities; i++){
+    if(SortedCities[i].cluster_root != SortedCities[a].cluster_root){
+       cluster_counter++;
+       a = i;
+    }
+ }
+    
+    
  return cluster_counter;
 }
 
 
 
-void QuestsMan(FILE* results, FILE* quests, int* cluster_head, int cluster_counter, int cities, int* clusters, City *Cities){
+void QuestsMan(FILE* results, FILE* quests, SortedCity *SortedCities, int cluster_counter, int cities, int* clusters, City *Cities){
     int quest = 0;
     int h;
     while ((fscanf(quests, " Task%d", &quest) == 1)){
@@ -47,7 +101,7 @@ void QuestsMan(FILE* results, FILE* quests, int* cluster_head, int cluster_count
                 Task1(cluster_counter, results);
                 break;
             case 2:
-                 Task2(cluster_head, cluster_counter, cities, clusters, results);
+                 Task2(SortedCities, cluster_counter, cities, results);
                  break;
             case 3:
                 Task3(quests, Cities, cities, clusters, results, cluster_counter);
@@ -109,6 +163,7 @@ void WCQU(int operations, FILE* map, int* clusters, int cities){
       }
 }
 
+
  for(int k = 1; k <= cities; k++){
          int root = k;
          while(root != clusters[root - 1]) root = clusters[root - 1];
@@ -116,6 +171,18 @@ void WCQU(int operations, FILE* map, int* clusters, int cities){
       }
  free(size);
  return;
+}
+
+
+int cmpSorted(const void *x, const void *y) {
+    SortedCity *c1 = (SortedCity *)x;
+    SortedCity *c2 = (SortedCity *)y;
+    
+    if (c1->cluster_root == c2->cluster_root) {
+        return (c1->city_number - c2->city_number);
+    }
+    
+    return (c1->cluster_root - c2->cluster_root);
 }
 
 long long dist2(City *a, City *b, int *cluster) {

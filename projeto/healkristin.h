@@ -7,11 +7,16 @@
 #include <math.h>
 #include <limits.h>
 
-typedef struct{
+typedef struct {
     int x;
     int y;
     int city_number;
 } City;
+
+typedef struct {
+    int city_number;
+    int cluster_root;
+} SortedCity;
 
 typedef struct{
     double distance;
@@ -19,14 +24,18 @@ typedef struct{
     int City_out;
 } Connect;
 
-int ClusterMan(int* clusters, int cities, int* cluster_head,int operations);
-void QuestsMan(FILE* results, FILE* quests, int* cluster_head, int cluster_counter, int cities, int* clusters, City *Cities);
+void FileMan(int argc, char **argv, FILE **map, FILE **quests, FILE **position, char *filenameResult);
+void SortedCityMan(SortedCity *SortedCities, int cities, int* clusters);
+int cmpSorted(const void *x, const void *y);
+void CityMan(FILE* map, City *Cities, int cities, int X_max, int Y_max);
+int ClusterMan(int cities, SortedCity *SortedCities, int operations);
+void QuestsMan(FILE* results, FILE* quests, SortedCity *SortedCities, int cluster_counter, int cities, int* clusters, City *Cities);
 void WCQU(int operations, FILE* map, int* clusters, int cities);
 long long dist2(City *a, City *b, int *cluster);
 int cmpConnect(const void *x, const void *y);
 void prim(City *Cities, int cities, int *cluster, int p[], long long w[]);
 void Task1(int cluster_counter, FILE* results);
-void Task2(int* cluster_head, int cluster_counter,int cities, int* clusters, FILE* results);
+void Task2(SortedCity *SortedCities, int cluster_counter, int cities, FILE* results);
 void Task3(FILE* quests, City *Cities, int cities, int *clusters, FILE* results, int cluster_counter);
 void Task4(FILE* quests, City *Cities, int cities, int *clusters, FILE* results, int cluster_counter);
 void Task5(City *Cities, int cities, int *cluster, FILE *results);

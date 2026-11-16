@@ -17,9 +17,9 @@
 | 10 | coordenadas 60000 (overflow int nas distâncias) | ✅ OK | 0.00s |
 | 11 | coordenadas até 2e9 (long long necessário) | ✅ OK | 0.00s |
 | 12 | ficheiro .quests vazio | ✅ OK | 0.00s |
-| 13 | L=0 com cabeçalho só | ✅ OK | 0.01s |
+| 13 | L=0 com cabeçalho só | ✅ OK | 0.00s |
 | 14 | L maior que nº de linhas reais | ✅ OK | 0.00s |
-| 15 | L menor que nº de linhas reais (linhas extra) | ✅ OK | 0.01s |
+| 15 | L menor que nº de linhas reais (linhas extra) | ✅ OK | 0.00s |
 
 ## B. formato do .quests
 
@@ -58,7 +58,7 @@
 | 3 | coordenada 0 | ✅ OK | sem .results (correcto) |
 | 4 | coordenada negativa | ✅ OK | sem .results (correcto) |
 | 5 | falta uma cidade (menos linhas) | ✅ OK | sem .results (correcto) |
-| 6 | id duplicado (falta cidade 3) | ✅ OK | sem .results (correcto) |
+| 6 | id duplicado (falta cidade 3) | ❌ FALHA | .results criado (53 bytes) mas devia não haver output |
 | 7 | id fora de {1..C} (4) | ✅ OK | sem .results (correcto) |
 | 8 | id 0 | ✅ OK | sem .results (correcto) |
 | 9 | valor não numérico | ✅ OK | sem .results (correcto) |
@@ -102,24 +102,24 @@
 | 17 | duas .quests e nenhum .map | ✅ OK | sem output |
 | 18 | extensão com maiúsculas (.QUESTS) | ✅ OK | sem output |
 | 19 | string vazia como argumento | ✅ OK | sem output |
-| 20 | argumento só '.quests' sem nome | ❌ FALHA | criou ficheiros: ['.results'] (devia não produzir output) |
+| 20 | argumento só '.quests' sem nome | ✅ OK | sem output |
 
 ## G. desempenho (limite 10 s)
 
 | # | Caso | Veredicto | Detalhe |
 |---|---|---|---|
-| 1 | Task1 | 200k cidades sem ligações | ✅ OK | 0.05s |
+| 1 | Task1 | 200k cidades sem ligações | ✅ OK | 0.06s |
 | 2 | Task2 | 50k cidades, todas isoladas | ✅ OK | 0.02s |
-| 3 | Task2 | 100k cidades, todas isoladas | ✅ OK | 0.03s |
-| 4 | Task2 | 100k cidades, ~metade ligadas (muitos clusters) | ✅ OK | 2.95s |
-| 5 | Task1+Task2 | 300k cidades, 1 cluster (cadeia) | ✅ OK | 0.12s |
-| 6 | Task3 x1000 | 100k cidades | ✅ OK | 0.88s |
-| 7 | Task4 x20 | 100k cidades, clusters pequenos | ✅ OK | 1.05s |
-| 8 | Task4 x1000 | 20k cidades | ✅ OK | 1.20s |
-| 9 | Task4 x1 | 2 clusters grandes (50k+50k) | ✅ OK | 4.46s |
-| 10 | Task4 x1 | cluster gigante + 1 cidade fora (n=300k) | ✅ OK | 0.11s |
-| 11 | Task4 x100 | cluster gigante + 1 cidade fora (n=300k) | ✅ OK | 0.22s |
-| 12 | mapa grande: 500k cidades, 2M ligações, Task1 | ✅ OK | 0.51s |
+| 3 | Task2 | 100k cidades, todas isoladas | ✅ OK | 0.04s |
+| 4 | Task2 | 100k cidades, ~metade ligadas (muitos clusters) | ✅ OK | 0.06s |
+| 5 | Task1+Task2 | 300k cidades, 1 cluster (cadeia) | ✅ OK | 0.15s |
+| 6 | Task3 x1000 | 100k cidades | ✅ OK | 0.18s |
+| 7 | Task4 x20 | 100k cidades, clusters pequenos | ✅ OK | 0.36s |
+| 8 | Task4 x1000 | 20k cidades | ✅ OK | 1.21s |
+| 9 | Task4 x1 | 2 clusters grandes (50k+50k) | ✅ OK | 4.80s |
+| 10 | Task4 x1 | cluster gigante + 1 cidade fora (n=300k) | ✅ OK | 0.13s |
+| 11 | Task4 x100 | cluster gigante + 1 cidade fora (n=300k) | ✅ OK | 0.23s |
+| 12 | mapa grande: 500k cidades, 2M ligações, Task1 | ✅ OK | 0.56s |
 
 ## H. Task5 - ligação mínima entre clusters
 
@@ -129,16 +129,16 @@
 | 2 | 2 cidades na MESMA coordenada (distância 0.00) | ✅ OK | 0.00s |
 | 3 | soma exacta vs soma de arredondados (3×√2 = 4.24, não 4.23) | ✅ OK | 0.00s |
 | 4 | 1 só cluster -> 'Task5 0.00' e nenhuma ligação | ✅ OK | 0.00s |
-| 5 | C=1 (uma cidade) | ❌ FALHA | 0.01s 2 tarefas mas 1 blocos de resposta (blocos: ['Task5 0.00']) |
+| 5 | C=1 (uma cidade) | ❌ FALHA | 0.00s 2 tarefas mas 1 blocos de resposta (blocos: ['Task5 0.00']) |
 | 6 | cidades todas numa recta (colineares) | ✅ OK | 0.00s |
 | 7 | cidades todas na mesma vertical, ordem de ids trocada | ✅ OK | 0.00s |
 | 8 | aleatório MST única: 6 cidades, 3 clusters | ✅ OK | 0.00s |
 | 9 | aleatório MST única: 10 cidades, 4 clusters | ✅ OK | 0.00s |
 | 10 | aleatório MST única: 15 cidades, 6 clusters | ✅ OK | 0.00s |
-| 11 | aleatório MST única: 25 cidades, 9 clusters | ✅ OK | 0.01s |
+| 11 | aleatório MST única: 25 cidades, 9 clusters | ✅ OK | 0.00s |
 | 12 | aleatório MST única: 40 cidades, 14 clusters | ✅ OK | 0.00s |
 | 13 | aleatório MST única: 60 cidades, 30 clusters | ✅ OK | 0.00s |
-| 14 | aleatório MST única: 60 cidades, 60 clusters | ✅ OK | 0.01s |
+| 14 | aleatório MST única: 60 cidades, 60 clusters | ✅ OK | 0.00s |
 | 15 | aleatório MST única: 50 cidades, 2 clusters | ✅ OK | 0.00s |
 | 16 | coordenadas até 2·10^9 (dist² perto de 2^63) | ✅ OK | 0.00s |
 | 17 | grelha 5×5 (empates por todo o lado): válido e total óptimo | ✅ OK | 0.00s |
@@ -167,14 +167,14 @@
 | 9 | aleatório exacto: 9 cidades, 5 clusters (4 ligações), 4 partidas | ❌ FALHA | 0.00s 5 tarefas mas 1 blocos de resposta (blocos: ['Task5 76518.18']) |
 | 10 | aleatório exacto: 12 cidades, 7 clusters (6 ligações), 4 partidas | ❌ FALHA | 0.00s 5 tarefas mas 1 blocos de resposta (blocos: ['Task5 58595.21']) |
 | 11 | aleatório exacto: 14 cidades, 9 clusters (8 ligações), 4 partidas | ❌ FALHA | 0.00s 5 tarefas mas 1 blocos de resposta (blocos: ['Task5 104990.77']) |
-| 12 | aleatório exacto: 16 cidades, 12 clusters (11 ligações), 4 partidas | ❌ FALHA | 0.01s 5 tarefas mas 1 blocos de resposta (blocos: ['Task5 185703.47']) |
-| 13 | aleatório exacto: 20 cidades, 12 clusters (11 ligações), 4 partidas | ❌ FALHA | 0.01s 5 tarefas mas 1 blocos de resposta (blocos: ['Task5 112032.84']) |
-| 14 | 13 ligações (óptimo exacto não verificado, só validade+tempo) | ❌ FALHA | 0.01s 3 tarefas mas 1 blocos de resposta (blocos: ['Task5 152058.88']) |
+| 12 | aleatório exacto: 16 cidades, 12 clusters (11 ligações), 4 partidas | ❌ FALHA | 0.00s 5 tarefas mas 1 blocos de resposta (blocos: ['Task5 185703.47']) |
+| 13 | aleatório exacto: 20 cidades, 12 clusters (11 ligações), 4 partidas | ❌ FALHA | 0.00s 5 tarefas mas 1 blocos de resposta (blocos: ['Task5 112032.84']) |
+| 14 | 13 ligações (óptimo exacto não verificado, só validade+tempo) | ❌ FALHA | 0.00s 3 tarefas mas 1 blocos de resposta (blocos: ['Task5 152058.88']) |
 | 15 | 19 ligações (só validade+tempo; força bruta rebenta aqui) | ❌ FALHA | 0.00s 2 tarefas mas 1 blocos de resposta (blocos: ['Task5 196698.54']) |
-| 16 | 29 ligações (só validade+tempo) | ❌ FALHA | 0.01s 2 tarefas mas 1 blocos de resposta (blocos: ['Task5 306000.67']) |
+| 16 | 29 ligações (só validade+tempo) | ❌ FALHA | 0.00s 2 tarefas mas 1 blocos de resposta (blocos: ['Task5 306000.67']) |
 | 17 | Task6 ANTES da Task5 (a ordem das tarefas não pode importar) | ❌ FALHA | 0.00s 3 tarefas mas 1 blocos de resposta (blocos: ['Task5 62744.17']) |
 | 18 | Task6 sem nenhuma Task5 no ficheiro | ❌ FALHA | 0.00s .results vazio: o programa não escreveu nada (Task5/Task6 ainda não implementadas?) |
-| 19 | Task6 repetida várias vezes e partidas diferentes | ❌ FALHA | 0.01s .results vazio: o programa não escreveu nada (Task5/Task6 ainda não implementadas?) |
+| 19 | Task6 repetida várias vezes e partidas diferentes | ❌ FALHA | 0.00s .results vazio: o programa não escreveu nada (Task5/Task6 ainda não implementadas?) |
 | 20 | Task6 NÃO pode alterar clusters/posições (Task1-4 depois) | ❌ FALHA | 0.00s 8 tarefas mas 6 blocos de resposta (blocos: ['Task1 6', 'Task2 6', 'Task3 4 9', 'Task4 4 9', 'Task5 62744.17', 'Task4 9 4']) |
 | 21 | cidade de partida fora do mapa: 0, -1, C+1, 21 | ❌ FALHA | 0.00s 5 tarefas mas 1 blocos de resposta (blocos: ['Task5 62744.17']) |
 | 22 | fora do mapa com 1 só cluster (continua a ser -2) | ❌ FALHA | 0.00s .results vazio: o programa não escreveu nada (Task5/Task6 ainda não implementadas?) |
@@ -182,7 +182,7 @@
 | 24 | coordenadas até 2·10^9 na Task6 | ❌ FALHA | 0.00s 2 tarefas mas 1 blocos de resposta (blocos: ['Task5 2065224302.16']) |
 | 25 | grelha 5×5 isolada, Task5+Task6 (empates) | ❌ FALHA | 0.00s 4 tarefas mas 1 blocos de resposta (blocos: ['Task5 24.00']) |
 | 26 | 6 cidades na mesma coordenada, Task6 (todas as distâncias 0) | ❌ FALHA | 0.00s 2 tarefas mas 1 blocos de resposta (blocos: ['Task5 0.00']) |
-| 27 | s numa posição interior de um cluster grande (não é extremo de ligação) | ❌ FALHA | 0.01s 4 tarefas mas 1 blocos de resposta (blocos: ['Task5 93.46']) |
+| 27 | s numa posição interior de um cluster grande (não é extremo de ligação) | ❌ FALHA | 0.00s 4 tarefas mas 1 blocos de resposta (blocos: ['Task5 93.46']) |
 | 28 | 'Task6' sem argumento | ℹ️ INFO: continua | 'Task1 5\n\nTask2 5\nCluster: 1 2\nCluster: 3\nCluster: 4\nCluster: 5\nCluster: 6\n\n' |
 | 29 | 'Task6 abc' | ℹ️ INFO: continua | 'Task1 5\n\nTask2 5\nCluster: 1 2\nCluster: 3\nCluster: 4\nCluster: 5\nCluster: 6\n\n' |
 | 30 | 'Task6 1 2' (argumento a mais) | ℹ️ INFO: continua | 'Task1 5\n\nTask2 5\nCluster: 1 2\nCluster: 3\nCluster: 4\nCluster: 5\nCluster: 6\n\n' |
@@ -196,8 +196,8 @@
 | # | Caso | Veredicto | Detalhe |
 |---|---|---|---|
 | 1 | aleatório #1: 12 cidades, 7 clusters, 11 tarefas | ❌ FALHA | 0.00s 11 tarefas mas 9 blocos de resposta (blocos: ['Task2 7', 'Task4 12 2', 'Task3 -1 -2', 'Task5 76188.07', 'Task5 76188.07', 'Task5 76188.07']) |
-| 2 | aleatório #2: 30 cidades, 6 clusters, 11 tarefas | ❌ FALHA | 0.00s 11 tarefas mas 9 blocos de resposta (blocos: ['Task3 31 -2', 'Task5 29557.92', 'Task5 29557.92', 'Task5 29557.92', 'Task2 6', 'Task2 6']) |
-| 3 | aleatório #3: 20 cidades, 8 clusters, 17 tarefas | ❌ FALHA | 0.00s 17 tarefas mas 12 blocos de resposta (blocos: ['Task2 8', 'Task3 19 3', 'Task3 0 -2', 'Task3 21 -2', 'Task5 94388.64', 'Task3 21 -2']) |
+| 2 | aleatório #2: 30 cidades, 6 clusters, 11 tarefas | ❌ FALHA | 0.01s 11 tarefas mas 9 blocos de resposta (blocos: ['Task3 31 -2', 'Task5 29557.92', 'Task5 29557.92', 'Task5 29557.92', 'Task2 6', 'Task2 6']) |
+| 3 | aleatório #3: 20 cidades, 8 clusters, 17 tarefas | ❌ FALHA | 0.01s 17 tarefas mas 12 blocos de resposta (blocos: ['Task2 8', 'Task3 19 3', 'Task3 0 -2', 'Task3 21 -2', 'Task5 94388.64', 'Task3 21 -2']) |
 | 4 | aleatório #4: 8 cidades, 7 clusters, 20 tarefas | ❌ FALHA | 0.00s 20 tarefas mas 16 blocos de resposta (blocos: ['Task2 7', 'Task5 150087.22', 'Task5 150087.22', 'Task5 150087.22', 'Task2 7', 'Task4 0 -2']) |
 | 5 | aleatório #5: 20 cidades, 10 clusters, 16 tarefas | ❌ FALHA | 0.00s 16 tarefas mas 13 blocos de resposta (blocos: ['Task1 10', 'Task5 108676.19', 'Task2 10', 'Task5 108676.19', 'Task1 10', 'Task5 108676.19']) |
 | 6 | aleatório #6: 20 cidades, 7 clusters, 18 tarefas | ❌ FALHA | 0.00s 18 tarefas mas 14 blocos de resposta (blocos: ['Task5 69829.74', 'Task3 -1 -2', 'Task5 69829.74', 'Task2 7', 'Task2 7', 'Task1 7']) |
@@ -208,17 +208,17 @@
 | # | Caso | Veredicto | Detalhe |
 |---|---|---|---|
 | 1 | Task5 | 1200 cidades isoladas (óptimo verificado) | ✅ OK | 0.01s |
-| 2 | Task5 | 5.000 cidades isoladas | ℹ️ INFO | 0.16s linha 1: válido (árvore, ordem, formato), mas óptimo NÃO verificado (n grande) |
-| 3 | Task5 | 20.000 cidades isoladas | ℹ️ INFO | 3.33s linha 1: válido (árvore, ordem, formato), mas óptimo NÃO verificado (n grande) |
+| 2 | Task5 | 5.000 cidades isoladas | ℹ️ INFO | 0.20s linha 1: válido (árvore, ordem, formato), mas óptimo NÃO verificado (n grande) |
+| 3 | Task5 | 20.000 cidades isoladas | ℹ️ INFO | 3.32s linha 1: válido (árvore, ordem, formato), mas óptimo NÃO verificado (n grande) |
 | 4 | Task5 | 50.000 cidades isoladas | ❌ LENTO (>10 s) | cortado aos 15 s |
 | 5 | Task5 | 100.000 cidades isoladas (exige MST geométrica ~O(n log n)) | ❌ LENTO (>10 s) | cortado aos 15 s |
 | 6 | Task5 | 300.000 cidades num só cluster (não pode fazer trabalho a mais) | ❌ LENTO (>10 s) | cortado aos 15 s |
 | 7 | Task5+Task6 | 100.000 cidades, 2.000 clusters | ❌ LENTO (>10 s) | cortado aos 15 s |
 | 8 | Task5+Task6 | 200.000 cidades, 20.000 clusters | ❌ LENTO (>10 s) | cortado aos 15 s |
-| 9 | Task6 | 30 clusters (29 ligações) | ❌ FALHA | não criou o ficheiro .results |
-| 10 | Task6 | 200 clusters (199 ligações) | ❌ FALHA | 3.37s 2 tarefas mas 1 blocos de resposta (blocos: ['Task5 87803.03']) |
-| 11 | Task6 | 1.000 clusters (999 ligações) | ❌ FALHA | 3.38s 2 tarefas mas 1 blocos de resposta (blocos: ['Task5 912191.39']) |
-| 12 | Task6 x200 | 200 clusters, 200 pedidos Task6 | ❌ FALHA | 3.35s 201 tarefas mas 1 blocos de resposta (blocos: ['Task5 87803.03']) |
+| 9 | Task6 | 30 clusters (29 ligações) | ❌ FALHA | 0.05s 2 tarefas mas 1 blocos de resposta (blocos: ['Task5 35709.81']) |
+| 10 | Task6 | 200 clusters (199 ligações) | ❌ FALHA | 3.26s 2 tarefas mas 1 blocos de resposta (blocos: ['Task5 87803.03']) |
+| 11 | Task6 | 1.000 clusters (999 ligações) | ❌ FALHA | 3.22s 2 tarefas mas 1 blocos de resposta (blocos: ['Task5 912191.39']) |
+| 12 | Task6 x200 | 200 clusters, 200 pedidos Task6 | ❌ FALHA | 3.24s 201 tarefas mas 1 blocos de resposta (blocos: ['Task5 87803.03']) |
 | 13 | Task5 x500 | 2.000 clusters, 500 pedidos Task5 | ❌ LENTO (>10 s) | cortado aos 15 s |
 
 **Total: 165 casos, 47 falhas.**

@@ -7,7 +7,7 @@ void Task1(int cluster_counter, FILE* results){
     return; 
 }
 
-void Task2(int* cluster_head, int cluster_counter, int cities, int* clusters, FILE* results){
+void Task2(SortedCity *SortedCities, int cluster_counter, int cities, FILE* results){
 
     fprintf(results, "Task2 %d", cluster_counter);
     if(cluster_counter == cities){ 
@@ -16,19 +16,12 @@ void Task2(int* cluster_head, int cluster_counter, int cities, int* clusters, FI
         return;
     }
     int j = 0;
-    fprintf(results, "\nCluster: ");
-    int first = 1;
-    for(int i = 0; i < cities; i++) if(clusters[0] == clusters[i]){ fprintf(results, first ? "%d" : " %d", i + 1); first = 0; }
-    while(cluster_head[j] != 0){
-        fprintf(results, "\nCluster: ");
-        first = 1;
-        for(int i = 0; i < cities; i++){
-            if(clusters[i] == cluster_head[j]){
-                fprintf(results, first ? "%d" : " %d", i + 1);
-                first = 0;
-            }
+    for(int i = 0; i < cities; i++){
+        if(SortedCities[i].cluster_root != j){
+            j = SortedCities[i].cluster_root;
+            fprintf(results, "\nCluster:");
         }
-        j++;
+        fprintf(results, " %d", SortedCities[i].city_number);
     }
     fprintf(results, "\n\n");
 
@@ -64,14 +57,16 @@ void Task3(FILE *quests, City *Cities, int cities, int *clusters, FILE *results,
 
 
 void Task4(FILE* quests, City *Cities, int cities, int *clusters, FILE* results, int cluster_counter){
-    int city_ref, cluster_ref, k = 0, x = 0, inside_cities[cities], outside_cities[cities];
+    int city_ref, cluster_ref, k = 0, x = 0, closest_city_cluster = -2;
     long long best_distance_cluster = -1;
-    int closest_city_cluster = -2;
+   
     if(fscanf(quests, " %d", &city_ref) != 1) exit(0);
     if(cluster_counter == 1 || city_ref < 1 || city_ref > cities){
     fprintf(results, "Task4 %d -2\n\n", city_ref); 
     return;
     }
+    int* inside_cities = malloc(cities * sizeof(int));
+    int* outside_cities = malloc(cities * sizeof(int));
     cluster_ref = clusters[city_ref -1];
     for(int i = 0; i < cities; i++){ 
         if(clusters[i] != cluster_ref) outside_cities[k++] = i;
@@ -93,9 +88,10 @@ void Task4(FILE* quests, City *Cities, int cities, int *clusters, FILE* results,
     
     }
     fprintf(results, "Task4 %d %d\n\n", city_ref, closest_city_cluster);
+
+    free(outside_cities);
+    free(inside_cities);
 }
-
-
 
 // Task5: comprimento mínimo de cabo para ficar com um só cluster.
 void Task5(City *Cities, int cities, int *cluster, FILE *results) {
