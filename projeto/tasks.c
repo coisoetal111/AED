@@ -172,5 +172,5 @@ void Task5(City *Cities, int cities, int *cluster, FILE *results) {
   fprintf(results, "\n");
   free(p);
   free(w);
-  free(ligs);
+  free(ligs); //☆*: .｡. o(≧▽≦)o .｡.:*☆
 }
